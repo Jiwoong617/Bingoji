@@ -63,9 +63,11 @@ describe("Bingoji app flow", () => {
       fireEvent(carousel, event);
     };
     dispatchPointer("pointerdown", 220);
-    dispatchPointer("pointermove", 140);
-    expect(carousel).toHaveStyle({ "--carousel-drag": "-80px" });
-    dispatchPointer("pointerup", 140);
+    dispatchPointer("pointermove", 190);
+    expect(screen.getByRole("option", { name: /루키.*HP 42/ })).toHaveAttribute("aria-selected", "true");
+    dispatchPointer("pointermove", 110);
+    expect(screen.getByRole("option", { name: /건설 노동자.*HP 36/ })).toHaveAttribute("aria-selected", "true");
+    dispatchPointer("pointerup", 110);
     const worker = screen.getByRole("option", { name: /건설 노동자.*HP 36/ });
     expect(worker).toHaveAttribute("aria-selected", "true");
     expect(within(worker).queryByRole("heading", { name: "안전 제일" })).not.toBeInTheDocument();

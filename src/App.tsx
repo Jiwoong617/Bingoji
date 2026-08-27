@@ -279,17 +279,28 @@ function TitleScreen({ onStart, onHelp }: { onStart: () => void; onHelp: () => v
   );
 }
 
+const CAROUSEL_SLOT_FALLBACK = 96;
+
+function readCarouselSlot(track: HTMLElement): number {
+  const slot = parseFloat(getComputedStyle(track).getPropertyValue("--slot"));
+  return Number.isFinite(slot) && slot > 0 ? slot : CAROUSEL_SLOT_FALLBACK;
+}
+
 function CharacterScreen({ onStart, onCancel, onInfo }: { onStart: (id: string) => void; onCancel: () => void; onInfo: (id: string) => void }) {
   const [selectedId, setSelectedId] = useState(CHARACTERS[0].id);
   const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const dragStartX = useRef<number | null>(null);
+  const slotWidth = useRef(CAROUSEL_SLOT_FALLBACK);
   const dragged = useRef(false);
   const character = CHARACTERS.find((item) => item.id === selectedId) ?? CHARACTERS[0];
   const selectedIndex = CHARACTERS.findIndex((item) => item.id === character.id);
   const ability = splitAbility(character.ability);
   const moveSelection = (direction: number) => {
-    const nextIndex = (selectedIndex + direction + CHARACTERS.length) % CHARACTERS.length;
-    setSelectedId(CHARACTERS[nextIndex].id);
+    setSelectedId((current) => {
+      const index = CHARACTERS.findIndex((item) => item.id === current);
+      return CHARACTERS[(index + direction + CHARACTERS.length) % CHARACTERS.length].id;
+    });
   };
   return (
     <main className="center-screen character-screen">
@@ -299,46 +310,66 @@ function CharacterScreen({ onStart, onCancel, onInfo }: { onStart: (id: string) 
       </header>
       <section className="character-carousel" aria-label="플레이어블 캐릭터 캐러셀">
         <div
-          className="carousel-track"
+          className={`carousel-track${dragging ? " dragging" : ""}`}
           role="listbox"
           aria-label="플레이어블 캐릭터 목록"
-          style={{ "--carousel-drag": `${dragOffset}px` } as CSSProperties}
           onPointerDown={(event) => {
             dragStartX.current = event.clientX;
+            slotWidth.current = readCarouselSlot(event.currentTarget);
             dragged.current = false;
+            setDragging(true);
             setDragOffset(0);
           }}
           onPointerMove={(event) => {
             if (dragStartX.current === null) return;
-            const distance = event.clientX - dragStartX.current;
-            if (Math.abs(distance) > 8) {
+            let base = dragStartX.current;
+            let remainder = event.clientX - base;
+            if (Math.abs(remainder) > 8) {
               dragged.current = true;
               if (!event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.setPointerCapture?.(event.pointerId);
             }
-            setDragOffset(Math.max(-96, Math.min(96, distance)));
+            while (Math.abs(remainder) >= slotWidth.current) {
+              const step = remainder > 0 ? 1 : -1;
+              moveSelection(-step);
+              base += step * slotWidth.current;
+              remainder -= step * slotWidth.current;
+            }
+            dragStartX.current = base;
+            setDragOffset(remainder);
           }}
           onPointerUp={(event) => {
             if (dragStartX.current === null) return;
             const distance = event.clientX - dragStartX.current;
-            if (Math.abs(distance) >= 45) moveSelection(distance > 0 ? -1 : 1);
+            if (Math.abs(distance) >= slotWidth.current / 2) moveSelection(distance > 0 ? -1 : 1);
             dragStartX.current = null;
             setDragOffset(0);
+            setDragging(false);
             if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture?.(event.pointerId);
             if (dragged.current) window.setTimeout(() => { dragged.current = false; }, 0);
           }}
-          onPointerCancel={() => { dragStartX.current = null; dragged.current = false; setDragOffset(0); }}
+          onPointerCancel={() => { dragStartX.current = null; dragged.current = false; setDragOffset(0); setDragging(false); }}
         >
-          {[-2, -1, 0, 1, 2].map((offset) => {
-            const item = CHARACTERS[(selectedIndex + offset + CHARACTERS.length) % CHARACTERS.length];
+          {CHARACTERS.map((item, index) => {
+            const half = Math.floor(CHARACTERS.length / 2);
+            const slot = ((index - selectedIndex + CHARACTERS.length + half) % CHARACTERS.length) - half;
+            const position = slot + dragOffset / slotWidth.current;
+            const distance = Math.abs(position);
             return (
               <article
                 key={item.id}
-                className={`character-card character-slide offset-${offset < 0 ? `m${Math.abs(offset)}` : `p${offset}`} ${offset === 0 ? "selected" : ""}`}
+                className={`character-card character-slide ${slot === 0 ? "selected" : ""}`}
+                style={{
+                  "--slide-x": Math.sign(position) * Math.pow(distance, .82),
+                  "--slide-scale": Math.max(.45, 1 - .2 * distance),
+                  "--slide-turn": -Math.max(-2, Math.min(2, position)) * 13,
+                  "--slide-fade": Math.max(0, 1 - .32 * distance),
+                  zIndex: Math.round(10 - distance * 3),
+                } as CSSProperties}
                 role="option"
-                aria-selected={offset === 0}
+                aria-selected={slot === 0}
                 aria-label={`${item.name}, HP ${item.maxHp}`}
                 tabIndex={0}
-                onClick={() => { if (!dragged.current && offset !== 0) setSelectedId(item.id); }}
+                onClick={() => { if (!dragged.current && slot !== 0) setSelectedId(item.id); }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(item.id); }
                   else if (event.key === "ArrowLeft") moveSelection(-1);
