@@ -1,6 +1,6 @@
 import { EMOJIS } from "../content/data";
 import { SeededRandom, type RandomSource } from "./rng";
-import { applyRest, canRemoveEmoji, completeCurrentMap, createRewardOptions, createRun, generateMapCandidates, pickEnemy } from "./run";
+import { applyRest, canRemoveEmoji, completeCurrentMap, createRewardOptions, createRun, generateMapCandidates, generateRunMapCandidates, pickEnemy } from "./run";
 import type { EnemyKind, Rarity } from "./types";
 
 class ScriptedRandom implements RandomSource {
@@ -17,6 +17,12 @@ function rewardRarities(kind: EnemyKind, roll: number): Rarity[] {
 }
 
 describe("run progression", () => {
+  it("stores the selected difficulty for the whole Run", () => {
+    expect(createRun("rookie", 0, "easy").difficulty).toBe("easy");
+    expect(createRun("rookie", 0, "normal").difficulty).toBe("normal");
+    expect(createRun("rookie", 0, "hard").difficulty).toBe("hard");
+  });
+
   it("makes the first Map a forced normal battle", () => {
     const options = generateMapCandidates(0, new SeededRandom(1));
     expect(options).toHaveLength(1);
@@ -34,6 +40,26 @@ describe("run progression", () => {
     const options = generateMapCandidates(9, new SeededRandom(1));
     expect(options).toHaveLength(1);
     expect(options[0].type).toBe("boss");
+  });
+
+  it("applies event path constraints without bypassing the Boss Map", () => {
+    const forced = { ...createRun("rookie", 0), completedMaps: 3, forcedNextMapType: "elite" as const };
+    expect(generateRunMapCandidates(forced, new SeededRandom(1)).candidates.map((item) => item.type)).toEqual(["elite"]);
+    const boss = { ...forced, completedMaps: 9 };
+    expect(generateRunMapCandidates(boss, new SeededRandom(1)).candidates.map((item) => item.type)).toEqual(["boss"]);
+  });
+
+  it("repeats a left normal battle on the right at the exact 20 percent boundary", () => {
+    expect(generateMapCandidates(1, new ScriptedRandom([0, 0.199])).map((option) => option.type)).toEqual(["battle", "battle"]);
+    expect(generateMapCandidates(1, new ScriptedRandom([0, 0.2, 0])).map((option) => option.type)).toEqual(["battle", "question"]);
+  });
+
+  it("uses the non-battle weights for the right option in the other 80 percent", () => {
+    expect(generateMapCandidates(1, new ScriptedRandom([0, 0.9, 0.999])).map((option) => option.type)).toEqual(["battle", "rest"]);
+  });
+
+  it("keeps the original weights when the left option is not a normal battle", () => {
+    expect(generateMapCandidates(1, new ScriptedRandom([0.46, 0])).map((option) => option.type)).toEqual(["question", "battle"]);
   });
 
   it("always starts Stage 1 with the prairie rat", () => {
@@ -85,5 +111,11 @@ describe("run progression", () => {
     ["boss", 0.35, "rare"],
   ] as const)("uses exact %s reward rarity boundaries at roll %s", (kind, roll, expected) => {
     expect(rewardRarities(kind, roll)).toEqual([expected, expected]);
+  });
+
+  it("moves 20 percentage points into rare rewards for the thirteenth-floor modifier", () => {
+    const result = createRewardOptions(createRun("rookie", 0).player, "normal", new ScriptedRandom([0.8, 0, 0.8, 0]), 20);
+    expect(EMOJIS[result.characterEmojiId].rarity).toBe("rare");
+    expect(EMOJIS[result.commonEmojiId].rarity).toBe("rare");
   });
 });

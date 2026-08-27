@@ -1,4 +1,4 @@
-import { advanceRetainedTurns, beginActorTurn, createCombat, createEnemyIntent, chooseEnemyCell, getCombatantDerivedStats, getEnemyAbilityIndicators, performEnemyTurn, playerPlace, resolveCompletedBingos, selectCombatCell } from "./combat";
+import { advanceRetainedTurns, beginActorTurn, createCombat, createEnemyIntent, chooseEnemyCell, getCombatantDerivedStats, getEnemyAbilityIndicators, performEnemyTurn, playerPlace, rerollOpeningDraw, resolveCompletedBingos, selectCombatCell } from "./combat";
 import { EMOJIS, ENEMIES } from "../content/data";
 import { SeededRandom, type RandomSource } from "./rng";
 import { boardHasBingo } from "./lines";
@@ -11,6 +11,7 @@ function combatFixture(board: Board): CombatState {
     enemy: { id: "e", icon: "👿", name: "E", ability: "", abilityId: "none", hp: 100, maxHp: 100, pool: { sword: 4, fire: 2 }, statuses: {}, turnFlags: { firstShieldGranted: false, firstIncomingReductionUsed: false }, combatFlags: { firstIncomingReductionUsed: false, randomHistory: {} } },
     enemyKind: "normal",
     stage: 1,
+    difficulty: "hard",
     phase: "player-selecting",
     turn: 1,
     draw: ["sword", "heart", "extra_turn"],
@@ -21,6 +22,7 @@ function combatFixture(board: Board): CombatState {
     events: [],
     lastBingo: null,
     enemyAbility: { bingoCount: 0, playerBingoCount: 0, turnCount: 0, used: false, lastTriggeredTurn: 0, stacks: 0, markedCell: null, markedKind: null, glitchDrawIndex: null, threeActFirstEmojiId: null, prophecyOrientation: "horizontal", phase: 1 },
+    combatRules: { drawSize: 3, excludedDrawEmojiIds: [], linkedDrawPair: null, shakyPlacementChance: 0, firstPlacementExtra: false, firstPlacementUsed: false, enemyFirstDouble: false, enemyFirstDoubleUsed: false, firstBingoBoost: 1, playerFirstBingoBoostUsed: false, enemyFirstBingoBoostUsed: false, openingRedrawAvailable: false, forcedDrawEmojiId: null, eventEggPlaced: false, eventBabyDestroyed: false },
   };
 }
 
@@ -31,8 +33,59 @@ const noCritRng: RandomSource = {
   pick: <T,>(items: readonly T[]) => items[0],
   shuffle: <T,>(items: readonly T[]) => [...items],
 };
+const chanceRng = (value: number): RandomSource => ({ ...noCritRng, next: () => value });
 
 describe("combat engine", () => {
+  it("applies event modifiers when a combat is created", () => {
+    const player: RunPlayer = { characterId: "rookie", icon: "🙂", name: "P", ability: "", abilityId: "none", hp: 20, maxHp: 30, pool: { sword: 3, heart: 3, fire: 3 } };
+    const state = createCombat(player, ENEMIES[0], new SeededRandom(11), 1, [
+      { id: "freeze-emoji", name: "냉동", icon: "🧊", description: "", remainingBattles: 1, emojiId: "heart" },
+      { id: "battle-start-damage", name: "피해", icon: "💥", description: "", remainingBattles: 1, value: 4 },
+      { id: "starting-shield", name: "방어막", icon: "🛡️", description: "", remainingBattles: 1, value: 6 },
+      { id: "opening-redraw", name: "재Draw", icon: "🪩", description: "", remainingBattles: 1 },
+    ]);
+    expect(state.player.hp).toBe(16);
+    expect(state.player.statuses.shield?.value).toBe(6);
+    expect(state.draw).not.toContain("heart");
+    expect(state.combatRules.openingRedrawAvailable).toBe(true);
+    const rerolled = rerollOpeningDraw(state, new SeededRandom(12));
+    expect(rerolled.combatRules.openingRedrawAvailable).toBe(false);
+    expect(rerolled.discarded).toHaveLength(3);
+  });
+
+  it("forces the event egg into every Draw while incubating", () => {
+    const player: RunPlayer = { characterId: "rookie", icon: "🙂", name: "P", ability: "", abilityId: "none", hp: 20, maxHp: 30, pool: { sword: 3, heart: 3, fire: 3 } };
+    const state = createCombat(player, ENEMIES[0], new SeededRandom(7), 1, [{ id: "forced-egg-draw", name: "알", icon: "🥚", description: "", remainingBattles: 2 }]);
+    expect(state.draw).toHaveLength(3);
+    expect(state.draw).toContain("event_egg");
+  });
+
+  it("boosts only the first Bingo for each side with the disco modifier", () => {
+    const board = emptyBoard();
+    for (let index = 0; index < 5; index += 1) board[index] = { emojiId: "sword", placedBy: "player" };
+    const state = combatFixture(board);
+    state.combatRules.firstBingoBoost = 1.5;
+    const first = resolveCompletedBingos(state, 4, "player", noCritRng);
+    expect(first.enemy.hp).toBe(85);
+    const secondBoard = [...first.board];
+    for (let index = 5; index < 10; index += 1) secondBoard[index] = { emojiId: "sword", placedBy: "player" };
+    const second = resolveCompletedBingos({ ...first, board: secondBoard }, 9, "player", noCritRng);
+    expect(second.enemy.hp).toBe(75);
+  });
+
+  it("lets the enemy place twice on its first turn after smuggling", () => {
+    const state = combatFixture(emptyBoard());
+    state.phase = "enemy-thinking";
+    state.combatRules.enemyFirstDouble = true;
+    const first = performEnemyTurn(state, new SeededRandom(1), { cellIndex: 0, emojiId: "sword" });
+    expect(first.isExtraPlacement).toBe(true);
+    expect(first.placementsRemaining).toBe(1);
+    const second = performEnemyTurn(first, new SeededRandom(2), { cellIndex: 1, emojiId: "heart" });
+    expect(second.phase).toBe("player-selecting");
+    expect(second.board[0]?.placedBy).toBe("enemy");
+    expect(second.board[1]?.placedBy).toBe("enemy");
+  });
+
   it("deselects a selected empty Cell when it is clicked again", () => {
     const state = combatFixture(emptyBoard());
     const selected = selectCombatCell(state, 7);
@@ -145,23 +198,48 @@ describe("combat engine", () => {
     expect(chooseEnemyCell(board, new SeededRandom(10))).toBe(4);
   });
 
-  it("avoids leaving a one-cell Bingo chance from Stage 2 onward", () => {
+  it("avoids leaving a one-cell Bingo chance as the default Enemy behavior", () => {
     const board = emptyBoard();
     [0, 1, 2].forEach((index) => { board[index] = { emojiId: "sword", placedBy: "player" }; });
-    const chosen = chooseEnemyCell(board, new SeededRandom(10), 2);
+    const chosen = chooseEnemyCell(board, new SeededRandom(10));
     expect([3, 4]).not.toContain(chosen);
   });
 
-  it("still completes its own Bingo immediately on Stage 2", () => {
+  it.each([
+    ["easy", 0.799],
+    ["normal", 0.399],
+  ] as const)("places into a two-empty Line on %s when its probability succeeds", (difficulty, roll) => {
+    const board = emptyBoard();
+    [0, 1, 2].forEach((index) => { board[index] = { emojiId: "sword", placedBy: "player" }; });
+    expect([3, 4]).toContain(chooseEnemyCell(board, chanceRng(roll), 1, undefined, undefined, undefined, difficulty));
+  });
+
+  it.each([
+    ["easy", 0.8],
+    ["normal", 0.4],
+    ["hard", 0],
+  ] as const)("avoids a two-empty Line on %s when its probability does not succeed", (difficulty, roll) => {
+    const board = emptyBoard();
+    [0, 1, 2].forEach((index) => { board[index] = { emojiId: "sword", placedBy: "player" }; });
+    expect([3, 4]).not.toContain(chooseEnemyCell(board, chanceRng(roll), 1, undefined, undefined, undefined, difficulty));
+  });
+
+  it("still takes an immediate Bingo on easy before rolling the invitation chance", () => {
     const board = emptyBoard();
     [0, 1, 2, 3].forEach((index) => { board[index] = { emojiId: "sword", placedBy: "player" }; });
-    expect(chooseEnemyCell(board, new SeededRandom(10), 2)).toBe(4);
+    expect(chooseEnemyCell(board, chanceRng(0), 1, undefined, undefined, undefined, "easy")).toBe(4);
+  });
+
+  it("still completes its own Bingo before applying the default avoidance rule", () => {
+    const board = emptyBoard();
+    [0, 1, 2, 3].forEach((index) => { board[index] = { emojiId: "sword", placedBy: "player" }; });
+    expect(chooseEnemyCell(board, new SeededRandom(10))).toBe(4);
   });
 
   it("lets the perfect hand prefer a diagonal setup when no immediate Bingo exists", () => {
     const board = emptyBoard();
-    [0, 6, 12].forEach((index) => { board[index] = { emojiId: "target", placedBy: "enemy" }; });
-    expect([18, 24]).toContain(chooseEnemyCell(board, new SeededRandom(4), 1, "diagonal-precision", "target"));
+    [0, 6].forEach((index) => { board[index] = { emojiId: "target", placedBy: "enemy" }; });
+    expect([12, 18, 24]).toContain(chooseEnemyCell(board, new SeededRandom(4), 1, "diagonal-precision", "target"));
   });
 
   it("seeds six cells without an initial Bingo and leaves Pools unchanged", () => {

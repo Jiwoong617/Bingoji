@@ -3,7 +3,7 @@ import { COMMON_EMOJI_IDS } from "./emojis";
 
 describe("expanded content registry", () => {
   it("registers every documented common and character Emoji", () => {
-    expect(Object.keys(EMOJIS)).toHaveLength(122);
+    expect(Object.keys(EMOJIS)).toHaveLength(124);
     expect(validateContent()).toEqual([]);
   });
 
@@ -24,7 +24,7 @@ describe("expanded content registry", () => {
     for (const emoji of Object.values(EMOJIS)) {
       expect(["common", "uncommon", "rare"]).toContain(emoji.rarity);
       expect(Array.isArray(emoji.tags)).toBe(true);
-      expect(Boolean(emoji.onBingo.length || emoji.onPlace?.length || emoji.whileOwned)).toBe(true);
+      expect(Boolean(emoji.tags.includes("event") || emoji.onBingo.length || emoji.onPlace?.length || emoji.whileOwned)).toBe(true);
     }
   });
 

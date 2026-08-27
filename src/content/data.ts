@@ -1,15 +1,17 @@
 import type {
   CharacterDefinition,
   EnemyKind,
-  GameEventDefinition,
+  EventEffect,
   MapType,
   Pool,
 } from "../game/types";
 import { CHARACTER_REWARD_POOLS, COMMON_EMOJI_IDS, EMOJIS } from "./emojis";
 import { ENEMIES } from "./enemies";
+import { EVENTS } from "./events";
 
 export { EMOJIS } from "./emojis";
 export { ENEMIES } from "./enemies";
+export { EVENTS } from "./events";
 
 export const CHARACTERS: CharacterDefinition[] = [
   {
@@ -70,37 +72,6 @@ export const COMMON_REWARDS: Record<EnemyKind, string[]> = {
   boss: COMMON_EMOJI_IDS,
 };
 
-export const EVENTS: GameEventDefinition[] = [
-  {
-    id: "mystery-box", icon: "📦", title: "수상한 상자", content: "길 한가운데서 안쪽이 쿵쿵거리는 상자를 발견했습니다.",
-    choices: [
-      { id: "open", label: "상자를 연다", hint: "HP 4를 잃고 💣 폭탄을 얻습니다.", effects: [{ type: "damage", amount: 4 }, { type: "add-emoji", emojiId: "bomb" }] },
-      { id: "leave", label: "지나간다", hint: "아무 일도 일어나지 않습니다.", effects: [] },
-    ],
-  },
-  {
-    id: "warm-spring", icon: "♨️", title: "Emoji 온천", content: "따뜻한 김 사이로 하트 모양 거품이 떠오릅니다.",
-    choices: [
-      { id: "rest", label: "몸을 담근다", hint: "HP를 8 회복합니다.", effects: [{ type: "heal", amount: 8 }] },
-      { id: "bottle", label: "거품을 담는다", hint: "❤️ 하트를 얻습니다.", effects: [{ type: "add-emoji", emojiId: "heart" }] },
-    ],
-  },
-  {
-    id: "ancient-idol", icon: "🗿", title: "고대의 석상", content: "석상은 힘을 바치는 자에게 흔들리지 않는 Emoji를 약속합니다.",
-    choices: [
-      { id: "offer", label: "최대 HP를 바친다", hint: "최대 HP -3, 🗿 모아이 획득", effects: [{ type: "max-hp", amount: -3 }, { type: "add-emoji", emojiId: "statue" }] },
-      { id: "pray", label: "조용히 기도한다", hint: "최대 HP가 2 증가합니다.", effects: [{ type: "max-hp", amount: 2 }] },
-    ],
-  },
-  {
-    id: "emoji-wind", icon: "🌬️", title: "정리의 바람", content: "Pool 속 오래된 Emoji 하나가 바람에 날아가려 합니다.",
-    choices: [
-      { id: "release", label: "놓아준다", hint: "무작위 Emoji 한 개를 제거하고 HP를 5 회복합니다.", effects: [{ type: "remove-random-emoji" }, { type: "heal", amount: 5 }] },
-      { id: "hold", label: "붙잡는다", hint: "Pool을 그대로 유지합니다.", effects: [] },
-    ],
-  },
-];
-
 export const MAP_META: Record<MapType, { label: string; icon: string }> = {
   battle: { label: "일반 전투", icon: "⚔️" },
   elite: { label: "Elite 전투", icon: "💀" },
@@ -153,5 +124,21 @@ export function validateContent(): string[] {
       errors.push(`Stage ${stage}: Enemy 구성이 normal 4 / elite 2 / boss 1이 아님`);
     }
   }
+  const eventIds = EVENTS.map((item) => item.id);
+  if (new Set(eventIds).size !== eventIds.length) errors.push("중복 Event ID가 있습니다.");
+  const validateEventEffect = (label: string, effect: EventEffect): void => {
+    const references = effect.type === "add-emoji"
+      ? [effect.emojiId]
+      : effect.type === "add-character-or-common"
+        ? [effect.characterEmojiId, effect.commonEmojiId]
+        : [];
+    references.forEach((id) => { if (!EMOJIS[id]) errors.push(`${label}: 알 수 없는 Emoji ID ${id}`); });
+    if (effect.type === "random-branch") effect.branches.forEach((branch) => branch.effects.forEach((nested) => validateEventEffect(label, nested)));
+  };
+  EVENTS.forEach((gameEvent) => {
+    if (gameEvent.choices.length === 0) errors.push(`이벤트 ${gameEvent.id}: 선택지가 없음`);
+    if (gameEvent.stages?.some((stage) => stage < 1 || stage > 3)) errors.push(`이벤트 ${gameEvent.id}: 잘못된 Stage`);
+    gameEvent.choices.forEach((choice) => choice.effects.forEach((effect) => validateEventEffect(`이벤트 ${gameEvent.id}/${choice.id}`, effect)));
+  });
   return errors;
 }

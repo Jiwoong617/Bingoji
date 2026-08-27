@@ -169,8 +169,13 @@ const exclusive = [
   emoji("rage_burst", "🤯", "폭발 직전", "Bingo: 잃은 HP의 20% 피해, 최대 12", { rarity: "rare", tags: ["face", "damage"], bingo: [{ type: "damage", amount: 0, scale: { type: "missing-hp", factor: 0.2 }, cap: 12 }] }),
 ];
 
+const eventOnly = [
+  emoji("event_egg", "🥚", "품고 있는 알", "이벤트 임시 Emoji. Bingo 효과가 없습니다.", { tags: ["event", "animal", "growth"] }),
+  emoji("event_baby", "👶", "맡겨진 아기", "이벤트 임시 Emoji. Bingo 효과가 없습니다.", { tags: ["event"] }),
+];
+
 export const EMOJIS: Record<string, EmojiDefinition> = Object.fromEntries(
-  [...common, ...exclusive].map((item) => [item.id, item]),
+  [...common, ...exclusive, ...eventOnly].map((item) => [item.id, item]),
 );
 
 export const COMMON_EMOJI_IDS = common.map((item) => item.id);

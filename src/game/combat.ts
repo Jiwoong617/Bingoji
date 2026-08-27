@@ -1,6 +1,7 @@
 import { CHARACTER_REWARD_POOLS, COMMON_EMOJI_IDS, EMOJIS } from "../content/emojis";
 import { STATUS_DEFINITIONS } from "../content/statuses";
 import { BINGO_LINES, boardHasBingo, completedLinesAt } from "./lines";
+import { DIFFICULTY_BY_ID } from "./difficulty";
 import { drawFromPool, SeededRandom, weightedChoice, type RandomSource } from "./rng";
 import type {
   Actor,
@@ -11,6 +12,7 @@ import type {
   EffectCondition,
   EffectEvent,
   EffectTarget,
+  Difficulty,
   EnemyDefinition,
   EnemyAbilityId,
   EnemyIntent,
@@ -18,6 +20,7 @@ import type {
   LineDefinition,
   OwnedEffect,
   RunPlayer,
+  RunModifier,
   StatusId,
   StatusState,
   StoredEnemyEffect,
@@ -56,6 +59,11 @@ function cloneState(source: CombatState): CombatState {
     enemyAbility: {
       ...source.enemyAbility,
       storedEffect: source.enemyAbility.storedEffect ? { ...source.enemyAbility.storedEffect } : undefined,
+    },
+    combatRules: {
+      ...source.combatRules,
+      excludedDrawEmojiIds: [...source.combatRules.excludedDrawEmojiIds],
+      linkedDrawPair: source.combatRules.linkedDrawPair ? [...source.combatRules.linkedDrawPair] : null,
     },
   };
 }
@@ -213,16 +221,61 @@ function seedBoard(playerPool: RunPlayer["pool"], enemyPool: EnemyDefinition["po
   return fallback;
 }
 
-export function createCombat(player: RunPlayer, enemy: EnemyDefinition, rng: RandomSource, stage = 1): CombatState {
-  return {
-    board: seedBoard(player.pool, enemy.pool, rng),
+function playerDraw(state: CombatState, rng: RandomSource, requestedCount = state.combatRules.drawSize): string[] {
+  const pool = { ...state.player.pool };
+  state.combatRules.excludedDrawEmojiIds.forEach((id) => { delete pool[id]; });
+  const available = Object.values(pool).reduce((sum, count) => sum + count, 0);
+  const forcedEmojiId = state.combatRules.forcedDrawEmojiId;
+  const count = Math.min(requestedCount - (forcedEmojiId ? 1 : 0), available);
+  const pair = state.combatRules.linkedDrawPair;
+  if (pair && count >= 2 && (pool[pair[0]] ?? 0) > 0 && (pool[pair[1]] ?? 0) > 0 && rng.next() < 0.6) {
+    const remainder = { ...pool, [pair[0]]: pool[pair[0]] - 1, [pair[1]]: pool[pair[1]] - 1 };
+    if (remainder[pair[0]] <= 0) delete remainder[pair[0]];
+    if (remainder[pair[1]] <= 0) delete remainder[pair[1]];
+    const result = [pair[0], pair[1], ...drawFromPool(remainder, count - 2, rng)];
+    if (forcedEmojiId) result.push(forcedEmojiId);
+    return rng.shuffle(result);
+  }
+  const result = drawFromPool(pool, Math.max(0, count), rng);
+  if (forcedEmojiId) result.push(forcedEmojiId);
+  return rng.shuffle(result);
+}
+
+export function createCombat(player: RunPlayer, enemy: EnemyDefinition, rng: RandomSource, stage = 1, modifiers: RunModifier[] = [], difficulty: Difficulty = "normal"): CombatState {
+  const enemyPool = { ...enemy.pool };
+  for (const modifier of modifiers.filter((item) => item.id === "enemy-pool-copy" && item.emojiId)) {
+    enemyPool[modifier.emojiId!] = (enemyPool[modifier.emojiId!] ?? 0) + 1;
+  }
+  const rules: CombatState["combatRules"] = {
+    drawSize: modifiers.find((item) => item.id === "draw-size")?.value ?? 3,
+    excludedDrawEmojiIds: modifiers.filter((item) => item.id === "freeze-emoji" || item.id === "freeze-rare-reward").flatMap((item) => item.emojiId ? [item.emojiId] : []),
+    linkedDrawPair: (() => {
+      const value = modifiers.find((item) => item.id === "linked-draw")?.emojiId?.split("|");
+      return value?.length === 2 ? [value[0], value[1]] : null;
+    })(),
+    shakyPlacementChance: modifiers.find((item) => item.id === "shaky-placement")?.value ?? 0,
+    firstPlacementExtra: modifiers.some((item) => item.id === "first-placement-boost"),
+    firstPlacementUsed: false,
+    enemyFirstDouble: modifiers.some((item) => item.id === "enemy-first-double"),
+    enemyFirstDoubleUsed: false,
+    firstBingoBoost: modifiers.find((item) => item.id === "first-bingo-boost")?.value ?? 1,
+    playerFirstBingoBoostUsed: false,
+    enemyFirstBingoBoostUsed: false,
+    openingRedrawAvailable: modifiers.some((item) => item.id === "opening-redraw"),
+    forcedDrawEmojiId: modifiers.some((item) => item.id === "forced-egg-draw") ? "event_egg" : null,
+    eventEggPlaced: false,
+    eventBabyDestroyed: false,
+  };
+  const state: CombatState = {
+    board: seedBoard(player.pool, enemyPool, rng),
     player: newCombatant(player, true),
-    enemy: newCombatant(enemy, false),
+    enemy: newCombatant({ ...enemy, pool: enemyPool }, false),
     enemyKind: enemy.kind,
     stage,
+    difficulty,
     phase: "player-selecting",
     turn: 1,
-    draw: drawFromPool(player.pool, 3, rng),
+    draw: [],
     selectedCell: null,
     placementsRemaining: 1,
     isExtraPlacement: false,
@@ -243,7 +296,26 @@ export function createCombat(player: RunPlayer, enemy: EnemyDefinition, rng: Ran
       prophecyOrientation: "horizontal",
       phase: 1,
     },
+    combatRules: rules,
   };
+  const initialDrawSize = modifiers.find((item) => item.id === "first-draw-size")?.value;
+  state.draw = playerDraw(state, rng, initialDrawSize ?? rules.drawSize);
+  const startDamage = modifiers.filter((item) => item.id === "battle-start-damage").reduce((sum, item) => sum + (item.value ?? 0), 0);
+  if (startDamage > 0) state.player.hp = Math.max(0, state.player.hp - startDamage);
+  const startingShield = modifiers.filter((item) => item.id === "starting-shield").reduce((sum, item) => sum + (item.value ?? 0), 0);
+  if (startingShield > 0) addStatus(state.player, "shield", startingShield, "event_modifier", "player");
+  if (state.player.hp <= 0) state.phase = "lost";
+  return state;
+}
+
+export function rerollOpeningDraw(sourceState: CombatState, rng: RandomSource): CombatState {
+  if (sourceState.phase !== "player-selecting" || sourceState.turn !== 1 || sourceState.isExtraPlacement || !sourceState.combatRules.openingRedrawAvailable) return sourceState;
+  const state = cloneState(sourceState);
+  state.discarded = [...state.draw];
+  state.draw = playerDraw(state, rng);
+  state.combatRules.openingRedrawAvailable = false;
+  state.events = [event(state, "player", "event_modifier", "log", "player", "🪩 DJ의 선곡 · 첫 Draw를 새로 뽑았습니다.")];
+  return state;
 }
 
 function event(
@@ -964,6 +1036,7 @@ export function resolveCompletedBingos(
   placedCell: number,
   owner: Actor,
   rng: RandomSource = new SeededRandom(sourceState.turn * 997 + placedCell),
+  placementEffectBoost = 1,
 ): CombatState {
   const state = cloneState(sourceState);
   const lines = orderedResolutionLines(completedLinesAt(state.board, placedCell));
@@ -972,12 +1045,20 @@ export function resolveCompletedBingos(
     return state;
   }
 
+  const firstBingoBoostUsed = owner === "player"
+    ? state.combatRules.playerFirstBingoBoostUsed
+    : state.combatRules.enemyFirstBingoBoostUsed;
+  const firstBingoBoost = firstBingoBoostUsed ? 1 : state.combatRules.firstBingoBoost;
+  if (owner === "player") state.combatRules.playerFirstBingoBoostUsed = true;
+  else state.combatRules.enemyFirstBingoBoostUsed = true;
+  const eventBoost = Math.max(1, firstBingoBoost * placementEffectBoost);
+
   const snapshot = cloneBoard(state.board);
   const ctx: ResolutionContext = {
     state,
     snapshot,
     owner,
-    multiplier: lines.length,
+    multiplier: lines.length * eventBoost,
     rng,
     pendingDamage: { player: 0, enemy: 0 },
     pendingHeal: { player: 0, enemy: 0 },
@@ -1100,6 +1181,7 @@ function applyPlaceEffects(
       const targets = effect.pattern === "cross"
         ? cross
         : [cellIndex, ...rng.shuffle(cross.filter((index) => index !== cellIndex && state.board[index])).slice(0, 1)];
+      if (targets.some((index) => state.board[index]?.emojiId === "event_baby")) state.combatRules.eventBabyDestroyed = true;
       targets.forEach((index) => { state.board[index] = null; });
       destroyed = true;
       state.events.push(event(state, actor, originalEmojiId, "placement", actor, `${EMOJIS[originalEmojiId].icon} 주변 ${targets.length}칸 파괴 · 이 배치로 Bingo 불가능`));
@@ -1117,7 +1199,7 @@ function applyPlaceEffects(
       if (actor === "player") {
         const redrawCount = Math.max(1, state.draw.length);
         state.discarded.push(...state.draw);
-        state.draw = drawFromPool(state.player.pool, redrawCount, rng);
+        state.draw = playerDraw(state, rng, redrawCount);
         state.placementsRemaining += effect.count;
         state.events.push(event(state, actor, originalEmojiId, "placement", actor, `${EMOJIS[originalEmojiId].icon} ${redrawCount}개 새로 Draw · 추가 배치 ${effect.count}회`));
       } else {
@@ -1142,11 +1224,25 @@ export function selectCombatCell(state: CombatState, cellIndex: number | null): 
 }
 
 export function playerPlace(sourceState: CombatState, drawIndex: number, rng: RandomSource = new SeededRandom(sourceState.turn * 541 + drawIndex)): CombatState {
-  const cellIndex = sourceState.selectedCell;
+  let cellIndex = sourceState.selectedCell;
   if (sourceState.phase !== "player-selecting" || cellIndex === null || sourceState.board[cellIndex] || drawIndex < 0 || drawIndex >= sourceState.draw.length) return sourceState;
   const state = cloneState(sourceState);
   state.events = [];
+  const boostedFirstPlacement = state.combatRules.firstPlacementExtra && !state.combatRules.firstPlacementUsed;
+  if (boostedFirstPlacement) {
+    const emptyCells = state.board.map((cell, index) => cell ? -1 : index).filter((index) => index >= 0);
+    if (emptyCells.length > 0) cellIndex = rng.pick(emptyCells);
+    state.combatRules.firstPlacementUsed = true;
+    state.events.push(event(state, "player", "event_modifier", "placement", "player", "🫨 진동 집중 · 첫 Emoji가 무작위 빈칸에 배치되고 Bingo 효과가 2배가 됩니다."));
+  } else if (state.combatRules.shakyPlacementChance > 0 && rng.next() < state.combatRules.shakyPlacementChance) {
+    const nearby = adjacentCells(cellIndex).filter((index) => !state.board[index]);
+    if (nearby.length > 0) {
+      cellIndex = rng.pick(nearby);
+      state.events.push(event(state, "player", "event_modifier", "placement", "player", "🫨 진동 부작용 · 선택한 Emoji가 인접 빈칸으로 흔들렸습니다."));
+    }
+  }
   const originalEmojiId = state.draw.splice(drawIndex, 1)[0];
+  if (originalEmojiId === "event_egg") state.combatRules.eventEggPlaced = true;
   const glitched = state.enemy.abilityId === "glitch-infection" && state.enemyAbility.glitchDrawIndex === drawIndex;
   let emojiId = originalEmojiId;
   if (glitched) {
@@ -1169,7 +1265,7 @@ export function playerPlace(sourceState: CombatState, drawIndex: number, rng: Ra
   state.lastBingo = null;
   const canChain = !state.isExtraPlacement || ALLOW_EXTRA_PLACEMENT_CHAIN;
   const placed = glitched ? { state, emojiId, destroyed: false } : applyPlaceEffects(state, "player", cellIndex, emojiId, canChain, rng);
-  let result = placed.destroyed ? placed.state : resolveCompletedBingos(placed.state, cellIndex, "player", rng);
+  let result = placed.destroyed ? placed.state : resolveCompletedBingos(placed.state, cellIndex, "player", rng, boostedFirstPlacement ? 2 : 1);
   if (result.phase === "won" || result.phase === "lost") return result;
   if (result.placementsRemaining > 0 && result.draw.length > 0) return { ...result, phase: "player-selecting", isExtraPlacement: true };
   return { ...result, phase: "enemy-thinking", discarded: [...result.discarded, ...result.draw], draw: [], placementsRemaining: 0, isExtraPlacement: false, enemyAbility: { ...result.enemyAbility, glitchDrawIndex: null } };
@@ -1270,20 +1366,23 @@ function enemyCellScore(
 export function chooseEnemyCell(
   board: Board,
   rng: RandomSource,
-  stage = 1,
+  _stage = 1,
   abilityId?: EnemyAbilityId,
   emojiId?: string,
   state?: CombatState,
+  difficulty: Difficulty = "hard",
 ): number {
   const lineStates = BINGO_LINES.map((line) => ({ line, empty: line.cells.filter((index) => !board[index]) })).filter((item) => item.empty.length > 0);
   const winningCells = [...new Set(lineStates.filter((item) => item.empty.length === 1).flatMap((item) => item.empty))];
   if (winningCells.length > 0) return rng.pick(winningCells);
   let availableCells = board.map((cell, index) => cell === null ? index : -1).filter((index) => index >= 0);
-  if (stage >= 2) {
-    const riskyCells = new Set(lineStates.filter((item) => item.empty.length === 2).flatMap((item) => item.empty));
-    const safeCells = availableCells.filter((index) => !riskyCells.has(index));
-    if (safeCells.length > 0) availableCells = safeCells;
-  }
+  const riskyCells = new Set(lineStates.filter((item) => item.empty.length === 2).flatMap((item) => item.empty));
+  const invitationCells = availableCells.filter((index) => riskyCells.has(index));
+  const safeCells = availableCells.filter((index) => !riskyCells.has(index));
+  const invitationChance = DIFFICULTY_BY_ID[difficulty].invitationChance;
+  const invitesPlayerBingo = invitationCells.length > 0 && invitationChance > 0 && rng.next() < invitationChance;
+  if (invitesPlayerBingo) availableCells = invitationCells;
+  else if (safeCells.length > 0) availableCells = safeCells;
   const scored = availableCells.map((cellIndex) => ({ cellIndex, score: enemyCellScore(board, cellIndex, abilityId, emojiId, state) }));
   const best = Math.max(...scored.map((item) => item.score));
   return rng.pick(scored.filter((item) => item.score === best)).cellIndex;
@@ -1296,7 +1395,7 @@ export function createEnemyIntent(state: CombatState, rng: RandomSource): EnemyI
     delete drawPool[state.enemyAbility.threeActFirstEmojiId];
   }
   const emojiId = drawFromPool(drawPool, 1, rng)[0];
-  return { cellIndex: chooseEnemyCell(nextBoard, rng, state.stage, state.enemy.abilityId as EnemyAbilityId, emojiId, state), emojiId };
+  return { cellIndex: chooseEnemyCell(nextBoard, rng, state.stage, state.enemy.abilityId as EnemyAbilityId, emojiId, state, state.difficulty), emojiId };
 }
 
 export function performEnemyTurn(sourceState: CombatState, rng: RandomSource, initialIntent?: EnemyIntent): CombatState {
@@ -1313,7 +1412,12 @@ export function performEnemyTurn(sourceState: CombatState, rng: RandomSource, in
   if (state.phase === "won" || state.phase === "lost") return state;
 
   const threeAct = state.enemy.abilityId === "three-act-show" ? ((state.enemyAbility.turnCount - 1) % 3) + 1 : 0;
-  const plannedPlacements = continuing ? state.placementsRemaining : threeAct === 3 ? 2 : 1;
+  let plannedPlacements = continuing ? state.placementsRemaining : threeAct === 3 ? 2 : 1;
+  if (!continuing && state.combatRules.enemyFirstDouble && !state.combatRules.enemyFirstDoubleUsed) {
+    plannedPlacements = Math.max(plannedPlacements, 2);
+    state.combatRules.enemyFirstDoubleUsed = true;
+    state.events.push(event(state, "enemy", "event_modifier", "placement", "enemy", "👽 밀수 적발 · Enemy가 첫 Turn에 두 번 배치합니다."));
+  }
   const intent = initialIntent ?? createEnemyIntent({ ...state, isExtraPlacement: true }, rng);
   const { emojiId, cellIndex } = intent;
   state.board[cellIndex] = { emojiId, placedBy: "enemy", turnsOnBoard: 0 };
@@ -1351,7 +1455,7 @@ export function performEnemyTurn(sourceState: CombatState, rng: RandomSource, in
   state = beginActorTurn({ ...state, board: advanceRetainedTurns(state.board) }, "player");
   if (state.phase === "won" || state.phase === "lost") return state;
   const nextTurn = state.turn + 1;
-  const nextDraw = drawFromPool(state.player.pool, 3, rng);
+  const nextDraw = playerDraw(state, rng);
   const glitchDrawIndex = state.enemy.abilityId === "glitch-infection" && nextTurn % 3 === 0 ? rng.int(nextDraw.length) : null;
   const prophecySequence: LineOrientation[] = ["horizontal", "vertical", "diagonal"];
   return {

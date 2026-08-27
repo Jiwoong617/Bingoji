@@ -182,6 +182,18 @@ h1, h2, h3, p { margin-top: 0; }
 .starting-pool button:hover, .final-pool button:hover { border-color: var(--yellow); }
 .starting-pool small, .final-pool small { margin-left: 3px; color: var(--muted); }
 
+.difficulty-screen { justify-content: center; }
+.difficulty-character-icon { margin-right: 4px; font-size: 1.45rem; vertical-align: middle; }
+.difficulty-options { width: min(900px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+.difficulty-card { min-height: 190px; padding: 25px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 1px solid var(--line); border-radius: 25px; background: linear-gradient(150deg, rgba(48,41,82,.96), rgba(27,24,47,.96)); color: var(--text); box-shadow: var(--shadow); cursor: pointer; transition: transform .18s ease, border-color .18s ease; }
+.difficulty-card:hover, .difficulty-card:focus-visible { transform: translateY(-6px); border-color: var(--yellow); }
+.difficulty-icon { font-size: 3.4rem; line-height: 1; }
+.difficulty-card h2 { margin: 0; font-size: 1.8rem; }
+.difficulty-easy { border-color: rgba(80,220,150,.35); }
+.difficulty-normal { border-color: rgba(255,208,90,.35); }
+.difficulty-hard { border-color: rgba(255,90,110,.35); }
+.difficulty-screen > .ghost-button { margin-top: 22px; }
+
 .hp-wrap { display: flex; align-items: center; gap: 10px; width: 100%; }
 .hp-track { height: 11px; flex: 1; overflow: hidden; border-radius: 99px; background: rgba(0,0,0,.3); box-shadow: inset 0 1px 3px rgba(0,0,0,.5); }
 .hp-fill { height: 100%; border-radius: inherit; transition: width .35s ease; }
@@ -214,6 +226,17 @@ h1, h2, h3, p { margin-top: 0; }
 .run-status { max-width: 650px; margin: 22px auto 0; padding: 14px 17px; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; border: 1px solid var(--line); border-radius: 17px; background: rgba(17,15,30,.75); }
 .run-status > div:first-child { display: flex; align-items: center; gap: 8px; }
 .run-status > div:first-child span { font-size: 1.8rem; }
+.run-effects { max-width: 650px; margin: 12px auto 0; padding: 12px 16px; display: grid; gap: 6px; border: 1px solid rgba(157,135,255,.28); border-radius: 15px; background: rgba(46,38,75,.62); }
+.run-effects p { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+.run-effects strong { color: var(--text); }
+.pending-event-reward { max-width: 820px; margin: 0 auto 20px; padding: 20px; display: grid; grid-template-columns: auto 1fr; gap: 12px 16px; border: 1px solid rgba(255,208,90,.5); border-radius: 20px; background: linear-gradient(145deg, rgba(66,53,94,.95), rgba(29,25,48,.95)); box-shadow: var(--shadow); }
+.pending-event-reward > span { font-size: 2.6rem; }
+.pending-event-reward h2, .pending-event-reward p { margin: 0; }
+.pending-reward-options { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.pending-reward-options button { min-height: 132px; padding: 13px; display: flex; flex-direction: column; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.05); cursor: pointer; }
+.pending-reward-options button:hover { border-color: var(--yellow); transform: translateY(-2px); }
+.pending-reward-options button > span { font-size: 2rem; }
+.pending-reward-options small { color: var(--muted); font-size: .68rem; line-height: 1.35; }
 .pool-count { color: var(--muted); font-size: .7rem; font-weight: 900; }
 
 .battle-screen { width: min(100%, 760px); padding-top: 12px; padding-bottom: 30px; }
@@ -319,6 +342,8 @@ h1, h2, h3, p { margin-top: 0; }
 .draw-heading { display: flex; align-items: baseline; gap: 9px; margin-bottom: 9px; }
 .draw-heading span { color: var(--yellow); font-size: .58rem; font-weight: 900; letter-spacing: .12em; }
 .draw-heading strong { font-size: .77rem; }
+.draw-heading button { margin-left: auto; padding: 6px 10px; border: 1px solid rgba(255,208,90,.45); border-radius: 9px; background: rgba(255,208,90,.1); color: var(--text); font-size: .68rem; cursor: pointer; }
+.draw-heading button:hover { border-color: var(--yellow); }
 .draw-row { display: grid; grid-template-columns: 58px 1fr 58px; gap: 9px; }
 .draw-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-height: 95px; }
 .draw-card { min-width: 0; padding: 9px 5px; display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(140,116,255,.28); border-radius: 14px; background: linear-gradient(145deg, rgba(69,59,111,.7), rgba(35,30,58,.9)); cursor: pointer; transition: transform .14s ease, border-color .14s ease; animation: drawFromPool .56s calc(var(--draw-index) * .12s) cubic-bezier(.18,.88,.25,1.18) both; }
@@ -385,7 +410,14 @@ h1, h2, h3, p { margin-top: 0; }
 .event-choices { display: grid; gap: 10px; margin-top: 28px; }
 .event-choices button { padding: 17px; display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.05); cursor: pointer; }
 .event-choices button:hover { border-color: var(--yellow); }
+.event-choices button:disabled { opacity: .46; cursor: not-allowed; }
 .event-choices span { color: var(--muted); font-size: .75rem; }
+.event-choices small { color: #ffaaa6; }
+.event-screen .story-card { width: min(860px, 100%); }
+.event-pool-select { display: grid; gap: 14px; margin-top: 22px; text-align: left; }
+.event-pool-select h2, .event-pool-select p { margin: 0; }
+.event-pool-select > strong { color: var(--yellow); }
+.event-pool-grid { width: 100%; }
 .event-outcome { margin-top: 25px; padding: 19px; border-radius: 16px; background: rgba(0,0,0,.2); }
 .event-outcome p { color: #e4dff3; }
 .event-outcome .primary-button { margin-top: 10px; }
@@ -461,10 +493,15 @@ h1, h2, h3, p { margin-top: 0; }
   .side-character-name { font-size: .56rem; }
   .character-slide.selected .side-character-icon { font-size: 3.25rem; }
   .selected-card { padding: 20px; }
+  .difficulty-options { grid-template-columns: 1fr; gap: 10px; }
+  .difficulty-card { min-height: 82px; padding: 17px; gap: 6px; }
+  .difficulty-icon { font-size: 2.2rem; }
+  .difficulty-card h2 { font-size: 1.25rem; }
   .map-card { min-height: 240px; padding: 15px 10px; }
   .map-icon { margin: 22px 0 14px; font-size: 3.7rem; }
   .run-status { grid-template-columns: 1fr auto; }
   .run-status .hp-wrap { grid-column: 1 / -1; grid-row: 2; }
+  .pending-reward-options { grid-template-columns: 1fr; }
   .stage-progress { padding: 8px 10px 10px; }
   .stage-dots { gap: 4px; }
   .stage-dot { width: 23px; height: 23px; font-size: .5rem; }

@@ -7,10 +7,11 @@ import {
   MAP_META,
 } from "../content/data";
 import { poolEntries, type RandomSource, weightedChoice } from "./rng";
+import { pickRunEvent } from "./events";
 import type {
   EnemyDefinition,
   EnemyKind,
-  EventChoice,
+  Difficulty,
   GameEventDefinition,
   MapCandidate,
   MapType,
@@ -24,6 +25,7 @@ export const RUN_CONFIG = {
   mapsPerStage: 10,
   restHealRatio: 0.3,
   questionBattleChance: 0.35,
+  battlePairRepeatChance: 0.2,
   mapWeights: {
     battle: 46,
     question: 29,
@@ -37,7 +39,7 @@ export const RUN_CONFIG = {
   } satisfies Record<EnemyKind, Record<Rarity, number>>,
 };
 
-export function createRun(characterId: string, now = Date.now()): RunProgress {
+export function createRun(characterId: string, now = Date.now(), difficulty: Difficulty = "normal"): RunProgress {
   const character = CHARACTERS.find((item) => item.id === characterId) ?? CHARACTERS[0];
   return {
     player: {
@@ -50,11 +52,19 @@ export function createRun(characterId: string, now = Date.now()): RunProgress {
       maxHp: character.maxHp,
       pool: { ...character.startingPool },
     },
+    difficulty,
     stage: 1,
     completedMaps: 0,
     currentMap: 0,
     currentMapType: null,
     lastEnemyId: null,
+    seenEventIds: [],
+    modifiers: [],
+    scheduledRewards: [],
+    pendingEventReward: null,
+    notices: [],
+    forcedNextMapType: null,
+    ensureNextBattleOption: false,
     startedAt: now,
   };
 }
@@ -79,6 +89,14 @@ function randomMapType(rng: RandomSource, excludeRest = false): MapType {
   return weightedChoice(options, rng);
 }
 
+function randomNonBattleMapType(rng: RandomSource): Exclude<MapType, "battle" | "boss"> {
+  return weightedChoice([
+    { value: "question" as const, weight: RUN_CONFIG.mapWeights.question },
+    { value: "elite" as const, weight: RUN_CONFIG.mapWeights.elite },
+    { value: "rest" as const, weight: RUN_CONFIG.mapWeights.rest },
+  ], rng);
+}
+
 export function generateMapCandidates(
   completedMaps: number,
   rng: RandomSource,
@@ -92,7 +110,33 @@ export function generateMapCandidates(
       candidate(side === restSide ? "rest" : randomMapType(rng, true), nextPosition, side),
     );
   }
-  return [0, 1].map((side) => candidate(randomMapType(rng), nextPosition, side));
+  const leftType = randomMapType(rng);
+  const rightType = leftType === "battle"
+    ? rng.next() < RUN_CONFIG.battlePairRepeatChance
+      ? "battle"
+      : randomNonBattleMapType(rng)
+    : randomMapType(rng);
+  return [candidate(leftType, nextPosition, 0), candidate(rightType, nextPosition, 1)];
+}
+
+export function generateRunMapCandidates(
+  sourceRun: RunProgress,
+  rng: RandomSource,
+): { run: RunProgress; candidates: MapCandidate[] } {
+  const nextPosition = sourceRun.completedMaps + 1;
+  let candidates: MapCandidate[];
+  if (sourceRun.forcedNextMapType && nextPosition > 1 && nextPosition < RUN_CONFIG.mapsPerStage) {
+    candidates = [candidate(sourceRun.forcedNextMapType, nextPosition, 0)];
+  } else {
+    candidates = generateMapCandidates(sourceRun.completedMaps, rng);
+    if (sourceRun.ensureNextBattleOption && candidates.length > 1 && !candidates.some((item) => item.type === "battle")) {
+      candidates[0] = candidate("battle", nextPosition, 0);
+    }
+  }
+  return {
+    run: { ...sourceRun, forcedNextMapType: null, ensureNextBattleOption: false },
+    candidates,
+  };
 }
 
 export function enterMap(run: RunProgress, map: MapCandidate): RunProgress {
@@ -144,56 +188,8 @@ export function resolveQuestionMap(rng: RandomSource): "event" | "battle" {
   return rng.next() < RUN_CONFIG.questionBattleChance ? "battle" : "event";
 }
 
-export function pickEvent(rng: RandomSource): GameEventDefinition {
-  return rng.pick(EVENTS);
-}
-
-export function applyEventChoice(
-  sourcePlayer: RunPlayer,
-  choice: EventChoice,
-  rng: RandomSource,
-): { player: RunPlayer; messages: string[] } {
-  const player: RunPlayer = {
-    ...sourcePlayer,
-    pool: { ...sourcePlayer.pool },
-  };
-  const messages: string[] = [];
-  for (const effect of choice.effects) {
-    switch (effect.type) {
-      case "damage":
-        player.hp = Math.max(0, player.hp - effect.amount);
-        messages.push(`HP를 ${effect.amount} 잃었습니다.`);
-        break;
-      case "heal": {
-        const before = player.hp;
-        player.hp = Math.min(player.maxHp, player.hp + effect.amount);
-        messages.push(`HP를 ${player.hp - before} 회복했습니다.`);
-        break;
-      }
-      case "max-hp":
-        player.maxHp = Math.max(3, player.maxHp + effect.amount);
-        player.hp = Math.min(player.maxHp, Math.max(1, player.hp + Math.max(0, effect.amount)));
-        messages.push(`최대 HP가 ${effect.amount > 0 ? "+" : ""}${effect.amount} 변화했습니다.`);
-        break;
-      case "add-emoji":
-        player.pool[effect.emojiId] = (player.pool[effect.emojiId] ?? 0) + 1;
-        messages.push(`${EMOJIS[effect.emojiId].icon} ${EMOJIS[effect.emojiId].name}을 얻었습니다.`);
-        break;
-      case "remove-random-emoji": {
-        const entries = poolEntries(player.pool);
-        if (entries.length > 3) {
-          const emojiId = rng.pick(entries);
-          player.pool[emojiId] -= 1;
-          if (player.pool[emojiId] <= 0) delete player.pool[emojiId];
-          messages.push(`${EMOJIS[emojiId].icon} ${EMOJIS[emojiId].name} 한 개를 놓아주었습니다.`);
-        } else {
-          messages.push("Pool이 너무 작아 Emoji를 제거하지 않았습니다.");
-        }
-        break;
-      }
-    }
-  }
-  return { player, messages };
+export function pickEvent(run: RunProgress, rng: RandomSource): GameEventDefinition {
+  return pickRunEvent(run, EVENTS, rng);
 }
 
 export function applyRest(player: RunPlayer): { player: RunPlayer; healed: number } {
@@ -206,9 +202,18 @@ export function createRewardOptions(
   player: RunPlayer,
   enemyKind: EnemyKind,
   rng: RandomSource,
+  rareBoostPercent = 0,
 ): { characterEmojiId: string; commonEmojiId: string } {
   const character = CHARACTERS.find((item) => item.id === player.characterId) ?? CHARACTERS[0];
-  const rarityWeights = RUN_CONFIG.rewardRarityWeights[enemyKind];
+  const rarityWeights = { ...RUN_CONFIG.rewardRarityWeights[enemyKind] };
+  let remainingBoost = Math.max(0, rareBoostPercent);
+  const commonShift = Math.min(rarityWeights.common, remainingBoost);
+  rarityWeights.common -= commonShift;
+  rarityWeights.rare += commonShift;
+  remainingBoost -= commonShift;
+  const uncommonShift = Math.min(rarityWeights.uncommon, remainingBoost);
+  rarityWeights.uncommon -= uncommonShift;
+  rarityWeights.rare += uncommonShift;
   const pickReward = (ids: string[]) => {
     const byRarity: Record<Rarity, string[]> = { common: [], uncommon: [], rare: [] };
     ids.forEach((id) => byRarity[EMOJIS[id].rarity].push(id));

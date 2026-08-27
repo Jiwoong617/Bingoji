@@ -8,19 +8,29 @@ import {
   getCombatantDerivedStats,
   performEnemyTurn,
   playerPlace,
+  rerollOpeningDraw,
   selectCombatCell,
 } from "./game/combat";
 import { SeededRandom } from "./game/rng";
+import { DIFFICULTIES, DIFFICULTY_BY_ID } from "./game/difficulty";
+import {
+  advanceEventTimers,
+  canChooseEventChoice,
+  claimPendingEventReward,
+  consumeBattleEventModifiers,
+  resolveEventChoice,
+  selectableEventEmojiIds,
+  settleScheduledRewards,
+} from "./game/events";
 import {
   addEmoji,
-  applyEventChoice,
   applyRest,
   canRemoveEmoji,
   completeCurrentMap,
   createRewardOptions,
   createRun,
   enterMap,
-  generateMapCandidates,
+  generateRunMapCandidates,
   pickEnemy,
   pickEvent,
   removeEmoji,
@@ -31,7 +41,9 @@ import type {
   BingoEffect,
   EnemyKind,
   EnemyIntent,
+  EnemyDefinition,
   EffectEvent,
+  Difficulty,
   GameEventDefinition,
   MapCandidate,
   PlaceEffect,
@@ -45,6 +57,7 @@ import type {
 type Screen =
   | "title"
   | "character"
+  | "difficulty"
   | "map"
   | "battle"
   | "reward"
@@ -359,7 +372,29 @@ function CharacterScreen({ onStart, onCancel, onInfo }: { onStart: (id: string) 
   );
 }
 
-function MapScreen({ run, candidates, onSelect, onInfo }: { run: RunProgress; candidates: MapCandidate[]; onSelect: (map: MapCandidate) => void; onInfo: (id: string) => void }) {
+function DifficultyScreen({ characterId, onStart, onCancel }: { characterId: string; onStart: (difficulty: Difficulty) => void; onCancel: () => void }) {
+  const character = CHARACTERS.find((item) => item.id === characterId) ?? CHARACTERS[0];
+  return (
+    <main className="center-screen difficulty-screen">
+      <header className="screen-heading">
+        <p className="eyebrow">CHOOSE DIFFICULTY</p>
+        <h1>난이도 선택</h1>
+        <p><span className="difficulty-character-icon">{character.icon}</span> {character.name}의 Run 난이도를 정하세요.</p>
+      </header>
+      <section className="difficulty-options" aria-label="게임 난이도 목록">
+        {DIFFICULTIES.map((difficulty) => (
+          <button key={difficulty.id} className={`difficulty-card difficulty-${difficulty.id}`} type="button" onClick={() => onStart(difficulty.id)} aria-label={`${difficulty.label} 난이도로 시작`}>
+            <span className="difficulty-icon">{difficulty.icon}</span>
+            <h2>{difficulty.label}</h2>
+          </button>
+        ))}
+      </section>
+      <button className="ghost-button" type="button" onClick={onCancel}>← 캐릭터 다시 선택</button>
+    </main>
+  );
+}
+
+function MapScreen({ run, candidates, onSelect, onInfo, onClaimEventReward }: { run: RunProgress; candidates: MapCandidate[]; onSelect: (map: MapCandidate) => void; onInfo: (id: string) => void; onClaimEventReward: (emojiId: string) => void }) {
   return (
     <main className="game-shell map-screen">
       <StageProgress stage={run.stage} position={run.completedMaps + 1} />
@@ -368,7 +403,16 @@ function MapScreen({ run, candidates, onSelect, onInfo }: { run: RunProgress; ca
         <h1>다음 Map을 선택하세요</h1>
         <p>전체 경로는 보이지 않습니다. 지금의 선택에 집중하세요.</p>
       </header>
-      <section className={`map-options ${candidates.length === 1 ? "single" : ""}`}>
+      {run.pendingEventReward && (
+        <section className="pending-event-reward">
+          <span>{run.pendingEventReward.icon}</span>
+          <div><p className="eyebrow">DELAYED EVENT REWARD</p><h2>{run.pendingEventReward.name}</h2><p>보상 Emoji 하나를 선택하세요.</p></div>
+          <div className="pending-reward-options">
+            {run.pendingEventReward.options.map((emojiId) => <button key={emojiId} type="button" onClick={() => onClaimEventReward(emojiId)}><span>{EMOJIS[emojiId].icon}</span><strong>{EMOJIS[emojiId].name}</strong><small>{EMOJIS[emojiId].description}</small></button>)}
+          </div>
+        </section>
+      )}
+      {!run.pendingEventReward && <section className={`map-options ${candidates.length === 1 ? "single" : ""}`}>
         {candidates.map((map, index) => (
           <button key={map.id} className={`map-card map-${map.type}`} type="button" onClick={() => onSelect(map)}>
             <span className="map-side">{candidates.length === 1 ? "DESTINATION" : index === 0 ? "LEFT" : "RIGHT"}</span>
@@ -377,12 +421,21 @@ function MapScreen({ run, candidates, onSelect, onInfo }: { run: RunProgress; ca
             <small>{map.type === "question" ? "무슨 일이 일어날지 알 수 없습니다" : map.type === "rest" ? "최대 HP의 30% 회복" : map.type === "boss" ? "Stage의 마지막 전투" : "승리하면 Pool을 강화할 수 있습니다"}</small>
           </button>
         ))}
-      </section>
+      </section>}
       <section className="run-status">
         <div><span>{run.player.icon}</span><strong>{run.player.name}</strong></div>
         <HpBar hp={run.player.hp} maxHp={run.player.maxHp} tone="player" />
-        <span className="pool-count">POOL {Object.values(run.player.pool).reduce((a, b) => a + b, 0)}</span>
+        <span className="pool-count">{DIFFICULTY_BY_ID[run.difficulty].label} · POOL {Object.values(run.player.pool).reduce((a, b) => a + b, 0)}</span>
       </section>
+      {(run.notices.length > 0 || run.modifiers.length > 0 || run.scheduledRewards.length > 0) && (
+        <section className="run-effects" aria-label="진행 중인 이벤트 효과">
+          {run.notices.map((notice, index) => <p key={`${notice}-${index}`}>✨ {notice}</p>)}
+          {run.modifiers.map((modifier, index) => (
+            <p key={`${modifier.id}-${index}`}>{modifier.icon} <strong>{modifier.name}</strong> · {modifier.description}{modifier.remainingBattles ? ` (${modifier.remainingBattles}전투)` : modifier.remainingMaps ? ` (${modifier.remainingMaps} Map)` : ""}</p>
+          ))}
+          {run.scheduledRewards.map((reward) => <p key={reward.id}>{reward.icon} <strong>{reward.name}</strong>까지 {reward.mapsRemaining} {reward.counter === "battle" ? "전투" : "Map"}</p>)}
+        </section>
+      )}
       <OwnedPoolStrip pool={run.player.pool} onInfo={onInfo} />
     </main>
   );
@@ -625,7 +678,7 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
         </div>
       </section>
       <section className="draw-section" onClick={(event) => event.stopPropagation()}>
-        <div className="draw-heading"><span>THIS TURN</span><strong>DRAW EMOJI</strong></div>
+        <div className="draw-heading"><span>THIS TURN</span><strong>DRAW EMOJI</strong>{combat.combatRules.openingRedrawAvailable && <button type="button" onClick={() => onChange(rerollOpeningDraw(combat, rng))}>🪩 첫 Draw 다시 뽑기</button>}</div>
         <div className="draw-row">
           <button className="pool-button draw-pool-button" type="button" onClick={onPool}><span>🎒</span><small>MY POOL</small></button>
           <div className="draw-cards">
@@ -721,7 +774,27 @@ function RewardScreen({ run, options, onChoose, onInfo }: { run: RunProgress; op
   );
 }
 
-function EventScreen({ event, outcome, onChoose, onContinue }: { event: GameEventDefinition; outcome: string[]; onChoose: (choiceIndex: number) => void; onContinue: () => void }) {
+function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { run: RunProgress; event: GameEventDefinition; outcome: string[]; onChoose: (choiceIndex: number, selectedIds: string[]) => void; onContinue: () => void; onInfo: (emojiId: string) => void }) {
+  const [pendingChoice, setPendingChoice] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const choice = pendingChoice === null ? null : event.choices[pendingChoice];
+  const selectableIds = choice ? selectableEventEmojiIds(run, choice) : [];
+  const selectionMinimum = choice?.selection ? (choice.selection.minCount ?? choice.selection.count) : 0;
+  const choose = (choiceIndex: number) => {
+    const selectedChoice = event.choices[choiceIndex];
+    if (!canChooseEventChoice(run, selectedChoice)) return;
+    if (!selectedChoice.selection) onChoose(choiceIndex, []);
+    else {
+      setPendingChoice(choiceIndex);
+      setSelectedIds([]);
+    }
+  };
+  const toggleEmoji = (emojiId: string) => {
+    if (!choice?.selection) return;
+    setSelectedIds((current) => current.includes(emojiId)
+      ? current.filter((id) => id !== emojiId)
+      : current.length < choice.selection!.count ? [...current, emojiId] : current);
+  };
   return (
     <main className="center-screen event-screen">
       <section className="story-card">
@@ -729,13 +802,34 @@ function EventScreen({ event, outcome, onChoose, onContinue }: { event: GameEven
         <span className="story-icon">{event.icon}</span>
         <h1>{event.title}</h1>
         <p className="story-copy">{event.content}</p>
-        {outcome.length === 0 ? (
+        {outcome.length === 0 && pendingChoice === null ? (
           <div className="event-choices">
-            {event.choices.map((choice, index) => (
-              <button key={choice.id} type="button" onClick={() => onChoose(index)}>
-                <strong>{choice.label}</strong><span>{choice.hint}</span>
+            {event.choices.map((eventChoice, index) => (
+              <button key={eventChoice.id} type="button" disabled={!canChooseEventChoice(run, eventChoice)} onClick={() => choose(index)}>
+                <strong>{eventChoice.label}</strong><span>{eventChoice.hint}</span>
+                {!canChooseEventChoice(run, eventChoice) && <small>조건에 맞는 Emoji가 부족합니다.</small>}
               </button>
             ))}
+          </div>
+        ) : outcome.length === 0 && choice?.selection ? (
+          <div className="event-pool-select">
+            <button className="text-button" type="button" onClick={() => setPendingChoice(null)}>← 선택지로 돌아가기</button>
+            <h2>{choice.label}</h2>
+            <p>{choice.hint}</p>
+            <strong>{selectionMinimum === choice.selection.count ? `${choice.selection.count}종` : `${selectionMinimum}~${choice.selection.count}종`} 선택 · {selectedIds.length}/{choice.selection.count}</strong>
+            <div className="pool-grid large event-pool-grid">
+              {selectableIds.map((id) => {
+                const emoji = EMOJIS[id];
+                const selected = selectedIds.includes(id);
+                return (
+                  <button key={id} className={`pool-item ${selected ? "selected" : ""}`} type="button" aria-pressed={selected} onClick={() => toggleEmoji(id)}>
+                    <span>{emoji.icon}</span><strong>×{run.player.pool[id]}</strong><small>{emoji.name}</small>
+                    <small>{emoji.rarity === "common" ? "일반" : emoji.rarity === "uncommon" ? "고급" : "희귀"} · {emoji.tags.slice(0, 2).join(", ") || "태그 없음"}</small>
+                  </button>
+                );
+              })}
+            </div>
+            <button className="primary-button wide" type="button" disabled={selectedIds.length < selectionMinimum || selectedIds.length > choice.selection.count} onClick={() => onChoose(pendingChoice!, selectedIds)}>이 선택으로 확정</button>
           </div>
         ) : (
           <div className="event-outcome">
@@ -744,6 +838,7 @@ function EventScreen({ event, outcome, onChoose, onContinue }: { event: GameEven
           </div>
         )}
       </section>
+      <OwnedPoolStrip pool={run.player.pool} onInfo={onInfo} title="CURRENT EMOJI POOL" />
     </main>
   );
 }
@@ -803,6 +898,7 @@ export default function App() {
   const [infoEmoji, setInfoEmoji] = useState<string | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [pendingCharacterId, setPendingCharacterId] = useState<string | null>(null);
 
   const runPoolPlayer = useMemo<RunPlayer | null>(() => {
     if (!run) return null;
@@ -814,25 +910,44 @@ export default function App() {
     return <main className="center-screen"><section className="error-card"><h1>콘텐츠 오류</h1>{CONTENT_ERRORS.map((error) => <p key={error}>{error}</p>)}</section></main>;
   }
 
-  const startRun = (characterId: string) => {
-    const nextRun = createRun(characterId);
-    setRun(nextRun);
-    setCandidates(generateMapCandidates(0, rng));
+  const chooseCharacter = (characterId: string) => {
+    setPendingCharacterId(characterId);
+    setScreen("difficulty");
+  };
+
+  const startRun = (difficulty: Difficulty) => {
+    const characterId = pendingCharacterId ?? CHARACTERS[0].id;
+    const nextRun = createRun(characterId, Date.now(), difficulty);
+    const generated = generateRunMapCandidates(nextRun, rng);
+    setRun(generated.run);
+    setCandidates(generated.candidates);
     setCombat(null);
     setResult(null);
     setScreen("map");
   };
 
   const startBattle = (enteredRun: RunProgress, kind: EnemyKind) => {
-    const enemy = pickEnemy(enteredRun.stage, kind, rng, enteredRun.lastEnemyId, enteredRun.currentMap);
+    const cloneBattle = enteredRun.modifiers.some((modifier) => modifier.id === "player-clone-enemy");
+    const enemy: EnemyDefinition = cloneBattle ? {
+      id: "future_self_clone",
+      icon: "🪞",
+      name: "미래의 나",
+      maxHp: enteredRun.player.maxHp,
+      ability: "현재 캐릭터의 Emoji Pool을 그대로 사용합니다.",
+      abilityId: "none",
+      pool: { ...enteredRun.player.pool },
+      stages: [enteredRun.stage],
+      kind,
+      ai: "nearest-line",
+    } : pickEnemy(enteredRun.stage, kind, rng, enteredRun.lastEnemyId, enteredRun.currentMap);
     setRun({ ...enteredRun, lastEnemyId: enemy.id });
-    setCombat(createCombat(enteredRun.player, enemy, rng, enteredRun.stage));
+    setCombat(createCombat(enteredRun.player, enemy, rng, enteredRun.stage, enteredRun.modifiers, enteredRun.difficulty));
     setScreen("battle");
   };
 
   const selectMap = (map: MapCandidate) => {
     if (!run) return;
-    const enteredRun = enterMap(run, map);
+    const enteredRun = { ...enterMap(run, map), notices: [] };
     setRun(enteredRun);
     if (map.type === "battle") startBattle(enteredRun, "normal");
     else if (map.type === "elite") startBattle(enteredRun, "elite");
@@ -840,7 +955,9 @@ export default function App() {
     else if (map.type === "question") {
       if (resolveQuestionMap(rng) === "battle") startBattle(enteredRun, "normal");
       else {
-        setCurrentEvent(pickEvent(rng));
+        const selectedEvent = pickEvent(enteredRun, rng);
+        setRun({ ...enteredRun, seenEventIds: [...enteredRun.seenEventIds, selectedEvent.id] });
+        setCurrentEvent(selectedEvent);
         setEventOutcome([]);
         setScreen("event");
       }
@@ -865,9 +982,10 @@ export default function App() {
   };
 
   const advanceAfterMap = (sourceRun: RunProgress) => {
-    const advanced = completeCurrentMap(sourceRun);
-    setRun(advanced);
-    setCandidates(generateMapCandidates(advanced.completedMaps, rng));
+    const advanced = advanceEventTimers(completeCurrentMap(sourceRun), rng);
+    const generated = generateRunMapCandidates(advanced, rng);
+    setRun(generated.run);
+    setCandidates(generated.candidates);
     setCurrentEvent(null);
     setCombat(null);
     setReward(null);
@@ -876,7 +994,7 @@ export default function App() {
 
   const finishBattle = () => {
     if (!run || !combat) return;
-    const syncedRun: RunProgress = {
+    let syncedRun: RunProgress = {
       ...run,
       player: {
         ...run.player,
@@ -885,16 +1003,35 @@ export default function App() {
         pool: { ...combat.player.pool },
       },
     };
-    setRun(syncedRun);
+    if (combat.combatRules.eventEggPlaced) {
+      syncedRun = {
+        ...syncedRun,
+        scheduledRewards: syncedRun.scheduledRewards.map((reward) => reward.id === "egg-hatch" ? { ...reward, triggered: true } : reward),
+      };
+    }
+    if (combat.combatRules.eventBabyDestroyed) {
+      syncedRun = {
+        ...syncedRun,
+        scheduledRewards: syncedRun.scheduledRewards.map((reward) => reward.id === "baby-return" ? { ...reward, triggered: true } : reward),
+      };
+    }
     if (combat.phase === "lost") {
+      setRun(syncedRun);
       showResult(false, syncedRun);
       return;
     }
+    const rareBoost = syncedRun.modifiers
+      .filter((modifier) => modifier.id === "reward-rare-boost")
+      .reduce((sum, modifier) => sum + (modifier.value ?? 0), 0);
+    const processedRun = consumeBattleEventModifiers(syncedRun, true, rng);
+    setRun(processedRun);
     if (syncedRun.stage === 3 && syncedRun.currentMap === 10 && syncedRun.currentMapType === "boss") {
-      showResult(true, syncedRun);
+      const settledRun = settleScheduledRewards(processedRun, rng);
+      setRun(settledRun);
+      showResult(true, settledRun);
       return;
     }
-    setReward(createRewardOptions(syncedRun.player, combat.enemyKind, rng));
+    setReward(createRewardOptions(processedRun.player, combat.enemyKind, rng, rareBoost));
     setScreen("reward");
   };
 
@@ -903,18 +1040,19 @@ export default function App() {
     advanceAfterMap({ ...run, player });
   };
 
-  const chooseEvent = (choiceIndex: number) => {
+  const chooseEvent = (choiceIndex: number, selectedIds: string[]) => {
     if (!run || !currentEvent) return;
-    const outcome = applyEventChoice(run.player, currentEvent.choices[choiceIndex], rng);
-    const updatedRun = { ...run, player: outcome.player };
+    const outcome = resolveEventChoice(run, currentEvent.choices[choiceIndex], selectedIds, rng);
+    const updatedRun = outcome.run;
     setRun(updatedRun);
     setEventOutcome(outcome.messages.length ? outcome.messages : ["아무 일도 일어나지 않았습니다."]);
-    if (outcome.player.hp <= 0) showResult(false, updatedRun);
+    if (outcome.run.player.hp <= 0) showResult(false, updatedRun);
   };
 
   const resetToTitle = () => {
     rngRef.current = new SeededRandom(Date.now());
     setRun(null);
+    setPendingCharacterId(null);
     setCombat(null);
     setResult(null);
     setScreen("title");
@@ -923,11 +1061,12 @@ export default function App() {
   return (
     <div className="app">
       {screen === "title" && <TitleScreen onStart={() => setScreen("character")} onHelp={() => setHelpOpen(true)} />}
-      {screen === "character" && <CharacterScreen onStart={startRun} onCancel={() => setScreen("title")} onInfo={setInfoEmoji} />}
-      {screen === "map" && run && <MapScreen run={run} candidates={candidates} onSelect={selectMap} onInfo={setInfoEmoji} />}
+      {screen === "character" && <CharacterScreen onStart={chooseCharacter} onCancel={() => setScreen("title")} onInfo={setInfoEmoji} />}
+      {screen === "difficulty" && pendingCharacterId && <DifficultyScreen characterId={pendingCharacterId} onStart={startRun} onCancel={() => setScreen("character")} />}
+      {screen === "map" && run && <MapScreen run={run} candidates={candidates} onSelect={selectMap} onInfo={setInfoEmoji} onClaimEventReward={(emojiId) => setRun((current) => current ? claimPendingEventReward(current, emojiId) : current)} />}
       {screen === "battle" && run && combat && <BattleScreen run={run} combat={combat} rng={rng} onChange={setCombat} onFinish={finishBattle} onInfo={setInfoEmoji} onPool={() => setPoolOpen(true)} />}
       {screen === "reward" && run && reward && <RewardScreen run={run} options={reward} onChoose={chooseReward} onInfo={setInfoEmoji} />}
-      {screen === "event" && run && currentEvent && <EventScreen event={currentEvent} outcome={eventOutcome} onChoose={chooseEvent} onContinue={() => advanceAfterMap(run)} />}
+      {screen === "event" && run && currentEvent && <EventScreen run={run} event={currentEvent} outcome={eventOutcome} onChoose={chooseEvent} onContinue={() => advanceAfterMap(run)} onInfo={setInfoEmoji} />}
       {screen === "rest" && run && <RestScreen run={run} healed={restHealed} onContinue={() => advanceAfterMap(run)} />}
       {screen === "result" && result && <ResultScreen result={result} onRestart={resetToTitle} onInfo={setInfoEmoji} />}
 

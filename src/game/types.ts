@@ -1,4 +1,5 @@
 export type Actor = "player" | "enemy";
+export type Difficulty = "easy" | "normal" | "hard";
 export type EnemyKind = "normal" | "elite" | "boss";
 export type Pool = Record<string, number>;
 export type Rarity = "common" | "uncommon" | "rare";
@@ -139,6 +140,7 @@ export interface EmojiDefinition {
 
 export type CharacterAbilityId = "none" | "worker" | "clown" | "scientist" | "rage";
 export type EnemyAbilityId =
+  | "none"
   | "hasty-escape"
   | "venom-tail"
   | "last-thorn"
@@ -254,6 +256,23 @@ export interface EnemyAbilityState {
   phase: 1 | 2 | 3;
   storedEffect?: StoredEnemyEffect;
 }
+export interface CombatRuleState {
+  drawSize: number;
+  excludedDrawEmojiIds: string[];
+  linkedDrawPair: [string, string] | null;
+  shakyPlacementChance: number;
+  firstPlacementExtra: boolean;
+  firstPlacementUsed: boolean;
+  enemyFirstDouble: boolean;
+  enemyFirstDoubleUsed: boolean;
+  firstBingoBoost: number;
+  playerFirstBingoBoostUsed: boolean;
+  enemyFirstBingoBoostUsed: boolean;
+  openingRedrawAvailable: boolean;
+  forcedDrawEmojiId: string | null;
+  eventEggPlaced: boolean;
+  eventBabyDestroyed: boolean;
+}
 
 export interface CombatState {
   board: Board;
@@ -261,6 +280,7 @@ export interface CombatState {
   enemy: CombatantState;
   enemyKind: EnemyKind;
   stage: number;
+  difficulty: Difficulty;
   phase: CombatPhase;
   turn: number;
   draw: string[];
@@ -271,20 +291,99 @@ export interface CombatState {
   events: EffectEvent[];
   lastBingo: BingoResolution | null;
   enemyAbility: EnemyAbilityState;
+  combatRules: CombatRuleState;
 }
 
 export interface LineDefinition { id: string; label: string; cells: number[] }
 export type MapType = "battle" | "elite" | "question" | "rest" | "boss";
 export interface MapCandidate { id: string; type: MapType; label: string; icon: string }
 
+export interface EventEmojiFilter {
+  rarities?: Rarity[];
+  tags?: string[];
+  characterOnly?: boolean;
+  commonOnly?: boolean;
+  sameTagsAsSelected?: boolean;
+  notOwned?: boolean;
+}
+
+export interface EventSelectionRule {
+  count: 1 | 2;
+  minCount?: 1 | 2;
+  distinct?: boolean;
+  filter?: EventEmojiFilter;
+}
+
+export interface RunModifier {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  remainingBattles?: number;
+  remainingMaps?: number;
+  emojiId?: string;
+  value?: number;
+  triggered?: boolean;
+}
+
+export interface ScheduledReward {
+  id: string;
+  name: string;
+  icon: string;
+  mapsRemaining: number;
+  counter?: "map" | "battle";
+  kind: "random-rare" | "random-tag" | "character-choice" | "duplicate-selected" | "transform-selected" | "egg-hatch" | "baby-return";
+  emojiId?: string;
+  tag?: string;
+  count?: number;
+  triggered?: boolean;
+  skipNextTick?: boolean;
+  choiceCount?: number;
+}
+export interface PendingEventReward {
+  id: string;
+  name: string;
+  icon: string;
+  options: string[];
+}
+
 export type EventEffect =
   | { type: "heal"; amount: number }
   | { type: "damage"; amount: number }
   | { type: "max-hp"; amount: number }
   | { type: "add-emoji"; emojiId: string }
-  | { type: "remove-random-emoji" };
-export interface EventChoice { id: string; label: string; hint: string; effects: EventEffect[] }
-export interface GameEventDefinition { id: string; icon: string; title: string; content: string; choices: EventChoice[] }
+  | { type: "add-random-emoji"; filter?: EventEmojiFilter; count?: number; minSelectedCopies?: number }
+  | { type: "add-character-or-common"; characterId: string; characterEmojiId: string; commonEmojiId: string }
+  | { type: "remove-random-emoji"; count?: number }
+  | { type: "remove-selected"; selectionIndex?: number; count?: number | "all" }
+  | { type: "remove-all-selected" }
+  | { type: "duplicate-selected"; selectionIndex?: number; count: number }
+  | { type: "swap-selected-counts" }
+  | { type: "transform-selected"; selectionIndex?: number; filter: EventEmojiFilter }
+  | { type: "remove-most-common"; count?: number }
+  | { type: "duplicate-least-common"; count?: number }
+  | { type: "heal-per-selection"; amount: number }
+  | { type: "random-branch"; branches: Array<{ weight: number; label: string; effects: EventEffect[] }> }
+  | { type: "add-modifier"; modifier: RunModifier }
+  | { type: "schedule-reward"; reward: ScheduledReward }
+  | { type: "force-next-map"; mapType: Exclude<MapType, "boss"> }
+  | { type: "ensure-next-battle-option" };
+export interface EventChoice {
+  id: string;
+  label: string;
+  hint: string;
+  effects: EventEffect[];
+  selection?: EventSelectionRule;
+}
+export interface GameEventDefinition {
+  id: string;
+  icon: string;
+  title: string;
+  content: string;
+  choices: EventChoice[];
+  category?: "base" | "stage" | "rare" | "legacy";
+  stages?: number[];
+}
 
 export interface RunPlayer {
   characterId: string;
@@ -298,11 +397,19 @@ export interface RunPlayer {
 }
 export interface RunProgress {
   player: RunPlayer;
+  difficulty: Difficulty;
   stage: number;
   completedMaps: number;
   currentMap: number;
   currentMapType: MapType | null;
   lastEnemyId: string | null;
+  seenEventIds: string[];
+  modifiers: RunModifier[];
+  scheduledRewards: ScheduledReward[];
+  pendingEventReward: PendingEventReward | null;
+  notices: string[];
+  forcedNextMapType: Exclude<MapType, "boss"> | null;
+  ensureNextBattleOption: boolean;
   startedAt: number;
 }
 export type ResultState = { cleared: boolean; stage: number; map: number; elapsedMs: number; pool: Pool };

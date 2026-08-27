@@ -14,10 +14,16 @@ describe("Bingoji app flow", () => {
 
     fireEvent.click(screen.getByRole("option", { name: /과학자.*HP 32/ }));
     fireEvent.click(screen.getByRole("button", { name: "이 캐릭터로 시작" }));
+    expect(screen.getByRole("heading", { name: "난이도 선택" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "쉬움 난이도로 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "보통 난이도로 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "어려움 난이도로 시작" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "보통 난이도로 시작" }));
 
     expect(screen.getByRole("button", { name: /DESTINATION.*일반 전투/ })).toBeInTheDocument();
     expect(screen.queryByText("Elite 전투")).not.toBeInTheDocument();
     expect(screen.getByText("과학자")).toBeInTheDocument();
+    expect(screen.getByText(/보통 · POOL/)).toBeInTheDocument();
   });
 
   it("centers a selected carousel character and separates the ability name from its description", () => {
@@ -82,6 +88,7 @@ describe("Bingoji app flow", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
     fireEvent.click(screen.getByRole("button", { name: "이 캐릭터로 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "보통 난이도로 시작" }));
     fireEvent.click(screen.getByRole("button", { name: /DESTINATION.*일반 전투/ }));
     expect(screen.getByText("들쥐 정찰병")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /황급한 도주:/ })).toBeInTheDocument();
@@ -97,6 +104,7 @@ describe("Bingoji app flow", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
     fireEvent.click(screen.getByRole("button", { name: "이 캐릭터로 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "보통 난이도로 시작" }));
     fireEvent.click(screen.getByRole("button", { name: /DESTINATION.*일반 전투/ }));
     fireEvent.click(screen.getByRole("button", { name: /MY POOL/ }));
 
