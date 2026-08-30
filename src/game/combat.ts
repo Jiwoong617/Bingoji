@@ -1,4 +1,4 @@
-import { CHARACTER_REWARD_POOLS, COMMON_EMOJI_IDS, EMOJIS } from "../content/emojis";
+import { CHARACTER_REWARD_POOLS, COMMON_EMOJI_IDS, EMOJIS, TRANSFORM_EMOJI_IDS } from "../content/emojis";
 import { STATUS_DEFINITIONS } from "../content/statuses";
 import { BINGO_LINES, boardHasBingo, completedLinesAt } from "./lines";
 import { DIFFICULTY_BY_ID } from "./difficulty";
@@ -47,7 +47,7 @@ function cloneCombatant(combatant: CombatantState): CombatantState {
   };
 }
 
-function cloneState(source: CombatState): CombatState {
+export function cloneCombatState(source: CombatState): CombatState {
   return {
     ...source,
     board: cloneBoard(source.board),
@@ -67,6 +67,8 @@ function cloneState(source: CombatState): CombatState {
     },
   };
 }
+
+const cloneState = cloneCombatState;
 
 function newCombatant(
   source: RunPlayer | EnemyDefinition,
@@ -1037,6 +1039,7 @@ export function resolveCompletedBingos(
   owner: Actor,
   rng: RandomSource = new SeededRandom(sourceState.turn * 997 + placedCell),
   placementEffectBoost = 1,
+  continueAfterSelfDefeat = false,
 ): CombatState {
   const state = cloneState(sourceState);
   const lines = orderedResolutionLines(completedLinesAt(state.board, placedCell));
@@ -1100,18 +1103,18 @@ export function resolveCompletedBingos(
       line.emojiId = cell.emojiId;
       line.current = [];
       for (const effect of EMOJIS[cell.emojiId]?.onBingo ?? []) {
-        if (ctx.killedBySelfDamage) break;
+        if (ctx.killedBySelfDamage && !continueAfterSelfDefeat) break;
         const results = executeEffect(effect, ctx, line);
         results.forEach((result) => rememberEnemyEffect(ctx, result));
         line.current.push(...results);
       }
       if (line.current.length > 0) line.previous = line.current;
-      if (ctx.killedBySelfDamage) break;
+      if (ctx.killedBySelfDamage && !continueAfterSelfDefeat) break;
     }
-    if (ctx.killedBySelfDamage) break;
+    if (ctx.killedBySelfDamage && !continueAfterSelfDefeat) break;
   }
 
-  if (!ctx.killedBySelfDamage) {
+  if (!ctx.killedBySelfDamage || continueAfterSelfDefeat) {
     applyEnemyBingoAbility(ctx, lines);
     settleResolution(ctx);
     updateEnemyPhase(state);
@@ -1140,11 +1143,17 @@ export function resolveCompletedBingos(
   return state;
 }
 
-function transformCandidate(state: CombatState, actor: Actor, rng: RandomSource, rareBoost = 1): string {
+function transformCandidate(
+  state: CombatState,
+  actor: Actor,
+  rng: RandomSource,
+  rareBoost = 1,
+  candidateIds?: readonly string[],
+): string {
   const actorState = combatant(state, actor);
-  const candidates = [...new Set(actor === "player"
+  const candidates = [...new Set(candidateIds ?? (actor === "player"
     ? [...COMMON_EMOJI_IDS, ...(CHARACTER_REWARD_POOLS[actorState.id] ?? [])]
-    : COMMON_EMOJI_IDS)]
+    : COMMON_EMOJI_IDS))]
     .filter((id) => !EMOJIS[id].onPlace?.some((effect) => effect.type === "transform"));
   const luck = getStatusValue(actorState, "luck");
   const result = weightedChoice(candidates.map((id) => ({
@@ -1162,13 +1171,20 @@ function applyPlaceEffects(
   originalEmojiId: string,
   canChain: boolean,
   rng: RandomSource,
+  mode: "pve" | "pvp" = "pve",
 ): { state: CombatState; emojiId: string; destroyed: boolean } {
   const state = sourceState;
   let emojiId = originalEmojiId;
   let destroyed = false;
   for (const effect of EMOJIS[originalEmojiId]?.onPlace ?? []) {
     if (effect.type === "transform") {
-      emojiId = transformCandidate(state, actor, rng, effect.rareBoost);
+      emojiId = transformCandidate(
+        state,
+        actor,
+        rng,
+        effect.rareBoost,
+        mode === "pvp" ? TRANSFORM_EMOJI_IDS : undefined,
+      );
       const cell = state.board[cellIndex];
       if (cell) state.board[cellIndex] = { ...cell, emojiId };
       state.events.push(event(state, actor, originalEmojiId, "placement", actor, `${EMOJIS[originalEmojiId].icon} → ${EMOJIS[emojiId].icon} ${EMOJIS[emojiId].name} 변신`));
@@ -1186,20 +1202,22 @@ function applyPlaceEffects(
       destroyed = true;
       state.events.push(event(state, actor, originalEmojiId, "placement", actor, `${EMOJIS[originalEmojiId].icon} 주변 ${targets.length}칸 파괴 · 이 배치로 Bingo 불가능`));
     } else if (effect.type === "extra-placement" && canChain) {
-      const available = actor === "player" ? state.draw.length : effect.count;
+      const available = actor === "player" || mode === "pvp" ? state.draw.length : effect.count;
       const granted = Math.min(effect.count, available);
       if (granted > 0) state.placementsRemaining += granted;
       state.events.push(event(state, actor, originalEmojiId, "placement", actor, granted > 0 ? `${EMOJIS[originalEmojiId].icon} 추가 배치 ${granted}회` : `${EMOJIS[originalEmojiId].icon} 남은 Emoji가 없어 추가 배치가 발동하지 않았습니다.`));
-      if (actor === "enemy" && granted > 0 && state.enemy.abilityId === "encore-shield" && !state.enemyAbility.used) {
+      if (mode === "pve" && actor === "enemy" && granted > 0 && state.enemy.abilityId === "encore-shield" && !state.enemyAbility.used) {
         state.enemyAbility.used = true;
         const gained = addStatus(state.enemy, "shield", 3, "enemy_ability", "enemy");
         state.events.push(event(state, "enemy", "enemy_ability", "shield", "enemy", `👋 한 번 더 인사 · 방어막 +${gained}`, undefined, gained));
       }
     } else if (effect.type === "redraw-extra" && canChain) {
-      if (actor === "player") {
+      if (actor === "player" || mode === "pvp") {
         const redrawCount = Math.max(1, state.draw.length);
         state.discarded.push(...state.draw);
-        state.draw = playerDraw(state, rng, redrawCount);
+        state.draw = mode === "pvp"
+          ? drawFromPool(combatant(state, actor).pool, redrawCount, rng)
+          : playerDraw(state, rng, redrawCount);
         state.placementsRemaining += effect.count;
         state.events.push(event(state, actor, originalEmojiId, "placement", actor, `${EMOJIS[originalEmojiId].icon} ${redrawCount}개 새로 Draw · 추가 배치 ${effect.count}회`));
       } else {
@@ -1214,6 +1232,40 @@ function applyPlaceEffects(
     }
   }
   return { state, emojiId, destroyed };
+}
+
+/**
+ * UI, AI와 Turn 전환을 포함하지 않는 공용 배치 규칙입니다.
+ * PvP Match reducer가 양쪽 참가자에게 동일한 Draw·Place 효과를 적용할 때 사용합니다.
+ */
+export function placeDrawnEmojiForActor(
+  sourceState: CombatState,
+  actor: Actor,
+  cellIndex: number,
+  drawIndex: number,
+  rng: RandomSource,
+): CombatState {
+  if (
+    cellIndex < 0
+    || cellIndex >= sourceState.board.length
+    || sourceState.board[cellIndex]
+    || drawIndex < 0
+    || drawIndex >= sourceState.draw.length
+  ) return sourceState;
+
+  const state = cloneState(sourceState);
+  state.events = [];
+  state.discarded = [];
+  state.lastBingo = null;
+  state.selectedCell = null;
+  const originalEmojiId = state.draw.splice(drawIndex, 1)[0];
+  state.board[cellIndex] = { emojiId: originalEmojiId, placedBy: actor, turnsOnBoard: 0 };
+  state.placementsRemaining = Math.max(0, state.placementsRemaining - 1);
+  const canChain = !state.isExtraPlacement || ALLOW_EXTRA_PLACEMENT_CHAIN;
+  const placed = applyPlaceEffects(state, actor, cellIndex, originalEmojiId, canChain, rng, "pvp");
+  return placed.destroyed
+    ? placed.state
+    : resolveCompletedBingos(placed.state, cellIndex, actor, rng, 1, true);
 }
 
 export function selectCombatCell(state: CombatState, cellIndex: number | null): CombatState {

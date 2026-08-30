@@ -12,4 +12,14 @@ describe("seeded Pool draws", () => {
     const result = drawFromPool({ battle_eye: 3 }, 3, new SeededRandom(1));
     expect(result).toEqual(["battle_eye", "battle_eye", "battle_eye"]);
   });
+
+  it("continues the exact random sequence from a serialized state", () => {
+    const original = new SeededRandom(2026);
+    original.next();
+    original.next();
+    const restored = SeededRandom.fromState(original.snapshot());
+
+    expect(restored.next()).toBe(original.next());
+    expect(restored.next()).toBe(original.next());
+  });
 });

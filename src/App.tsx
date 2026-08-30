@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { EmojiDetailContent } from "./components/EmojiDetailContent";
+import { Modal } from "./components/Modal";
 import { CHARACTERS, EMOJIS, MAP_META, validateContent } from "./content/data";
-import { STATUS_DEFINITIONS } from "./content/statuses";
 import {
   createCombat,
   createEnemyIntent,
@@ -9,9 +10,30 @@ import {
   performEnemyTurn,
   playerPlace,
   rerollOpeningDraw,
+  SeededRandom,
   selectCombatCell,
-} from "./game/combat";
-import { SeededRandom } from "./game/rng";
+  type CombatState,
+  type Difficulty,
+  type EffectEvent,
+  type EnemyDefinition,
+  type EnemyIntent,
+  type EnemyKind,
+  type GameEventDefinition,
+  type MapCandidate,
+  type ResultState,
+  type RunPlayer,
+  type RunProgress,
+  type StatusState,
+  type MultiplayerProfile,
+} from "./shared";
+import {
+  emptyMultiplayerProfile,
+  MultiplayerProfileScreen,
+  type MultiplayerRoomAction,
+} from "./multiplayer/ProfileScreen";
+import { isMultiplayerServerConfigured, MultiplayerRoomClient, type MultiplayerClientState } from "./multiplayer/client";
+import { MultiplayerRoomScreen } from "./multiplayer/RoomScreen";
+import { MultiplayerBattleScreen } from "./multiplayer/BattleScreen";
 import { DIFFICULTIES, DIFFICULTY_BY_ID } from "./game/difficulty";
 import {
   advanceEventTimers,
@@ -36,28 +58,14 @@ import {
   removeEmoji,
   resolveQuestionMap,
 } from "./game/run";
-import type {
-  CombatState,
-  BingoEffect,
-  EnemyKind,
-  EnemyIntent,
-  EnemyDefinition,
-  EffectEvent,
-  Difficulty,
-  GameEventDefinition,
-  MapCandidate,
-  PlaceEffect,
-  ResultState,
-  RunPlayer,
-  RunProgress,
-  StatusState,
-  StatusId,
-} from "./game/types";
 
 type Screen =
   | "title"
+  | "mode"
   | "character"
   | "difficulty"
+  | "multiplayer-profile"
+  | "multiplayer-room"
   | "map"
   | "battle"
   | "reward"
@@ -74,26 +82,6 @@ const BINGO_PRESENTATION_MS = 2850;
 const BINGO_IMPACT_MS = 2050;
 
 const CONTENT_ERRORS = validateContent();
-
-function relatedStatuses(effects: Array<BingoEffect | PlaceEffect>): StatusId[] {
-  const result = new Set<StatusId>();
-  const visit = (effect: BingoEffect | PlaceEffect) => {
-    if (effect.type === "shield") result.add("shield");
-    else if (effect.type === "status") result.add(effect.statusId);
-    else if (effect.type === "cleanse") effect.statuses.forEach((status) => result.add(status));
-    else if (effect.type === "consume-status-damage") result.add(effect.statusId);
-    else if (effect.type === "trigger-poison") result.add("poison");
-    else if (effect.type === "lowest-resource") effect.resources.forEach((resource) => result.add(resource.statusId));
-    else if (effect.type === "post-if-no-crit") { result.add("luck"); result.add("shield"); }
-    else if (effect.type === "coin") result.add("shield");
-    else if (effect.type === "slot") result.add("luck");
-    else if (effect.type === "dice" && effect.otherwiseShield) { result.add("shield"); result.add("luck"); }
-    else if (effect.type === "heal" && effect.overflowToShield) result.add("shield");
-    else if (effect.type === "random") effect.options.flat().forEach(visit);
-  };
-  effects.forEach(visit);
-  return [...result];
-}
 
 function splitAbility(ability: string): { name: string; description: string } {
   const separator = ability.indexOf(":");
@@ -133,57 +121,6 @@ function StageProgress({ stage, position }: { stage: number; position: number })
         })}
       </div>
     </section>
-  );
-}
-
-function Modal({ title, onClose, children, layout = "center", cardClassName = "" }: { title: string; onClose: () => void; children: React.ReactNode; layout?: "center" | "top"; cardClassName?: string }) {
-  useEffect(() => {
-    const closeWithEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", closeWithEscape);
-    return () => window.removeEventListener("keydown", closeWithEscape);
-  }, [onClose]);
-
-  return (
-    <div className={`modal-backdrop modal-${layout}`} role="presentation" onMouseDown={onClose}>
-      <section
-        className={`modal-card ${cardClassName}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="modal-header">
-          <h2 id="modal-title">{title}</h2>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="닫기">✕</button>
-        </div>
-        {children}
-      </section>
-    </div>
-  );
-}
-
-function EmojiDetailContent({ emojiId }: { emojiId: string }) {
-  const emoji = EMOJIS[emojiId];
-  const abilityLabel = [
-    emoji.onPlace?.length ? "PLACEMENT" : null,
-    emoji.onBingo.length ? "BINGO" : null,
-    emoji.whileOwned ? "OWNED" : null,
-  ].filter(Boolean).join(" · ") + " EFFECT";
-  const rarityLabel = emoji.rarity === "common" ? "일반" : emoji.rarity === "uncommon" ? "고급" : "희귀";
-  const statusIds = relatedStatuses([...(emoji.onPlace ?? []), ...emoji.onBingo]);
-  return (
-    <div className="emoji-detail">
-      <span className="emoji-detail-icon">{emoji.icon}</span>
-      <div>
-        <p className="eyebrow">{abilityLabel}</p>
-        <h3>{emoji.name}</h3>
-        <p>{emoji.description}</p>
-        <div className="emoji-meta"><span>{rarityLabel}</span>{emoji.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
-        {statusIds.length > 0 && <section className="emoji-status-list"><strong>관련 BUFF / DEBUFF</strong>{statusIds.map((statusId) => { const status = STATUS_DEFINITIONS[statusId]; return <div key={statusId}><span>{status.icon}</span><p><b>{status.name}</b><small>{status.description}</small></p></div>; })}</section>}
-      </div>
-    </div>
   );
 }
 
@@ -275,6 +212,26 @@ function TitleScreen({ onStart, onHelp }: { onStart: () => void; onHelp: () => v
         <button className="ghost-button" type="button" onClick={onHelp}>게임 방법</button>
       </div>
       <p className="title-note">공용 Board에서 상대의 Emoji까지 빼앗아 Bingo를 완성하세요.</p>
+    </main>
+  );
+}
+
+function ModeSelectScreen({ onSingle, onMultiplayer, onCancel, multiplayerEnabled }: { onSingle: () => void; onMultiplayer: () => void; onCancel: () => void; multiplayerEnabled: boolean }) {
+  return (
+    <main className="center-screen mode-screen">
+      <header className="screen-heading">
+        <p className="eyebrow">CHOOSE GAME MODE</p>
+        <h1>게임 모드 선택</h1>
+      </header>
+      <section className="mode-options" aria-label="게임 모드 목록">
+        <button className="mode-card single" type="button" onClick={onSingle}>
+          <span>🗺️</span><h2>싱글플레이</h2><p>Stage를 돌파하는 기존 PvE Run</p>
+        </button>
+        <button className="mode-card multiplayer" type="button" onClick={onMultiplayer} disabled={!multiplayerEnabled}>
+          <span>⚔️</span><h2>멀티플레이</h2><p>{multiplayerEnabled ? "방 코드로 만나는 실시간 1:1 대전" : "멀티플레이 Server가 아직 설정되지 않았습니다."}</p>
+        </button>
+      </section>
+      <button className="ghost-button" type="button" onClick={onCancel}>← 메인 화면</button>
     </main>
   );
 }
@@ -917,6 +874,9 @@ function ResultScreen({ result, onRestart, onInfo }: { result: ResultState; onRe
 export default function App() {
   const rngRef = useRef(new SeededRandom(Date.now()));
   const rng = rngRef.current;
+  const multiplayerClientRef = useRef<MultiplayerRoomClient | null>(null);
+  if (!multiplayerClientRef.current) multiplayerClientRef.current = new MultiplayerRoomClient();
+  const multiplayerClient = multiplayerClientRef.current;
   const [screen, setScreen] = useState<Screen>("title");
   const [run, setRun] = useState<RunProgress | null>(null);
   const [candidates, setCandidates] = useState<MapCandidate[]>([]);
@@ -930,6 +890,12 @@ export default function App() {
   const [poolOpen, setPoolOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [pendingCharacterId, setPendingCharacterId] = useState<string | null>(null);
+  const [multiplayerDraft, setMultiplayerDraft] = useState<MultiplayerProfile>(emptyMultiplayerProfile);
+  const [multiplayerAction, setMultiplayerAction] = useState<MultiplayerRoomAction | null>(null);
+  const [multiplayerClientState, setMultiplayerClientState] = useState<MultiplayerClientState>(() => multiplayerClient.snapshot());
+
+  useEffect(() => multiplayerClient.subscribe(setMultiplayerClientState), [multiplayerClient]);
+  useEffect(() => () => multiplayerClient.destroy(), [multiplayerClient]);
 
   const runPoolPlayer = useMemo<RunPlayer | null>(() => {
     if (!run) return null;
@@ -1086,14 +1052,47 @@ export default function App() {
     setPendingCharacterId(null);
     setCombat(null);
     setResult(null);
+    setMultiplayerAction(null);
+    multiplayerClient.cancel();
+    setScreen("title");
+  };
+
+  const prepareMultiplayerRoom = (action: MultiplayerRoomAction, profile: MultiplayerProfile) => {
+    setMultiplayerDraft({ ...profile, pool: { ...profile.pool } });
+    setMultiplayerAction(action);
+    setScreen("multiplayer-room");
+    if (action === "create") multiplayerClient.createRoom(profile);
+    else multiplayerClient.cancel();
+  };
+
+  const leaveMultiplayerRoom = () => {
+    multiplayerClient.leave();
+    setMultiplayerAction(null);
+    setScreen("multiplayer-profile");
+  };
+
+  const cancelMultiplayerRoom = () => {
+    multiplayerClient.cancel();
+    setMultiplayerAction(null);
+    setScreen("multiplayer-profile");
+  };
+
+  const closeMultiplayerResult = () => {
+    multiplayerClient.leave();
+    setMultiplayerAction(null);
     setScreen("title");
   };
 
   return (
     <div className="app">
-      {screen === "title" && <TitleScreen onStart={() => setScreen("character")} onHelp={() => setHelpOpen(true)} />}
-      {screen === "character" && <CharacterScreen onStart={chooseCharacter} onCancel={() => setScreen("title")} onInfo={setInfoEmoji} />}
+      {screen === "title" && <TitleScreen onStart={() => setScreen("mode")} onHelp={() => setHelpOpen(true)} />}
+      {screen === "mode" && <ModeSelectScreen onSingle={() => setScreen("character")} onMultiplayer={() => setScreen("multiplayer-profile")} onCancel={() => setScreen("title")} multiplayerEnabled={isMultiplayerServerConfigured()} />}
+      {screen === "character" && <CharacterScreen onStart={chooseCharacter} onCancel={() => setScreen("mode")} onInfo={setInfoEmoji} />}
       {screen === "difficulty" && pendingCharacterId && <DifficultyScreen characterId={pendingCharacterId} onStart={startRun} onCancel={() => setScreen("character")} />}
+      {screen === "multiplayer-profile" && <MultiplayerProfileScreen draft={multiplayerDraft} onDraftChange={setMultiplayerDraft} onCancel={() => setScreen("mode")} onRoomAction={prepareMultiplayerRoom} />}
+      {screen === "multiplayer-room" && multiplayerAction && (multiplayerClientState.match
+        ? <MultiplayerBattleScreen clientState={multiplayerClientState} onPlace={(drawIndex, cellIndex) => multiplayerClient.placeEmoji(drawIndex, cellIndex)} onForfeit={() => multiplayerClient.forfeit()} onCloseResult={closeMultiplayerResult} onInfo={setInfoEmoji} />
+        : <MultiplayerRoomScreen action={multiplayerAction} profile={multiplayerDraft} clientState={multiplayerClientState} onJoin={(roomCode) => multiplayerClient.joinRoom(roomCode, multiplayerDraft)} onReady={(ready) => multiplayerClient.setReady(ready)} onLeave={leaveMultiplayerRoom} onCancel={cancelMultiplayerRoom} onClearError={() => multiplayerClient.clearError()} />)}
       {screen === "map" && run && <MapScreen run={run} candidates={candidates} onSelect={selectMap} onInfo={setInfoEmoji} onClaimEventReward={(emojiId) => setRun((current) => current ? claimPendingEventReward(current, emojiId) : current)} />}
       {screen === "battle" && run && combat && <BattleScreen run={run} combat={combat} rng={rng} onChange={setCombat} onFinish={finishBattle} onInfo={setInfoEmoji} onPool={() => setPoolOpen(true)} />}
       {screen === "reward" && run && reward && <RewardScreen run={run} options={reward} onChoose={chooseReward} onInfo={setInfoEmoji} />}

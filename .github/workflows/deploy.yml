@@ -35,6 +35,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_MULTIPLAYER_SERVER_URL: ${{ vars.MULTIPLAYER_SERVER_URL }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6

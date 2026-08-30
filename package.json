@@ -5,18 +5,27 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:worker": "wrangler dev",
+    "smoke:worker": "node worker/smoke-room.mjs",
+    "smoke:worker:timers": "node worker/smoke-room.mjs --timers",
     "build": "tsc -b && vite build",
+    "build:worker": "wrangler deploy --dry-run",
+    "deploy:worker": "wrangler deploy",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "typecheck:shared": "tsc -p tsconfig.shared.json --pretty false",
+    "types:worker": "wrangler types",
+    "typecheck:worker": "npm run types:worker && tsc -p tsconfig.worker.json --pretty false"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "emoji-picker-react": "^4.19.1",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "latest",
@@ -24,6 +33,7 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "jsdom": "26.1.0",
-    "vitest": "latest"
+    "vitest": "latest",
+    "wrangler": "^4.127.1"
   }
 }

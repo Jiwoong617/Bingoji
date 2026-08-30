@@ -1,10 +1,93 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
+import { PVP_EMOJI_IDS } from "./shared";
+
+function enterSinglePlayer() {
+  fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+  fireEvent.click(screen.getByRole("button", { name: /싱글플레이/ }));
+}
+
+function enterMultiplayer() {
+  fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+  fireEvent.click(screen.getByRole("button", { name: /멀티플레이/ }));
+}
 
 describe("Bingoji app flow", () => {
-  it("selects one of five characters and starts with the fixed normal battle map", () => {
+  it("chooses a game mode before entering the existing single-player flow", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+    expect(screen.getByRole("heading", { name: "게임 모드 선택" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /싱글플레이/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /멀티플레이/ })).toBeInTheDocument();
+  });
+
+  it("builds a valid multiplayer profile from every eligible registry Emoji and keeps the draft in app memory", async () => {
+    render(<App />);
+    enterMultiplayer();
+
+    expect(screen.getByRole("heading", { name: "멀티플레이 설정" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /정보 보기, Pool 0\/2$/ })).toHaveLength(PVP_EMOJI_IDS.length);
+    const createRoom = screen.getByRole("button", { name: "방 만들기" });
+    expect(createRoom).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/닉네임/), { target: { value: "빙고왕" } });
+    fireEvent.click(screen.getByRole("button", { name: "프로필 Emoji 선택" }));
+    const avatarPicker = screen.getByRole("dialog", { name: "프로필 Emoji 선택 창" });
+    const search = await within(avatarPicker).findByPlaceholderText("Emoji 검색");
+    fireEvent.change(search, { target: { value: "문어" } });
+    await waitFor(() => expect(avatarPicker.querySelector('[data-unified="1f419"]')).not.toBeNull());
+    const octopus = avatarPicker.querySelector<HTMLButtonElement>('[data-unified="1f419"]');
+    expect(octopus).not.toBeNull();
+    fireEvent.click(octopus!);
+    expect(screen.queryByRole("dialog", { name: "프로필 Emoji 선택 창" })).not.toBeInTheDocument();
+    const emojiDetail = screen.getByRole("region", { name: "선택한 Emoji 정보" });
+    for (const emojiName of ["쌍검", "하트", "불꽃", "행운의 클로버", "별빛"]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${emojiName} 정보 보기`) }));
+      const add = within(emojiDetail).getByRole("button", { name: "추가" });
+      fireEvent.click(add);
+      fireEvent.click(add);
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: /^쌍검 정보 보기, Pool 2\/2$/ }));
+    expect(within(emojiDetail).getByRole("button", { name: "추가" })).toBeDisabled();
+    expect(screen.getByText("✓ 대전에 사용할 프로필과 Pool이 준비되었습니다.")).toBeInTheDocument();
+    expect(createRoom).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "← 모드 선택" }));
+    fireEvent.click(screen.getByRole("button", { name: /멀티플레이/ }));
+    expect(screen.getByLabelText(/닉네임/)).toHaveValue("빙고왕");
+    expect(screen.getByRole("button", { name: "현재 🐙, 프로필 Emoji 선택" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^쌍검 정보 보기, Pool 2\/2$/ })).toBeInTheDocument();
+  });
+
+  it("selects catalog Emoji without adding it and edits or clears the Pool from the detail area", () => {
+    render(<App />);
+    enterMultiplayer();
+
+    const poolBuilder = screen.getByRole("region", { name: "PvP Emoji Pool 편집" });
+    const total = poolBuilder.querySelector(".pool-total strong");
+    const detail = screen.getByRole("region", { name: "선택한 Emoji 정보" });
+    const currentPool = screen.getByRole("region", { name: "현재 선택한 Pool" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^하트 정보 보기, Pool 0\/2$/ }));
+    expect(total).toHaveTextContent("0");
+    expect(within(detail).getByRole("heading", { name: "하트" })).toBeInTheDocument();
+
+    fireEvent.click(within(detail).getByRole("button", { name: "추가" }));
+    fireEvent.click(within(detail).getByRole("button", { name: "추가" }));
+    expect(total).toHaveTextContent("2");
+    expect(within(currentPool).getByRole("button", { name: "하트 정보 보기, Pool 2개" })).toBeInTheDocument();
+
+    fireEvent.click(within(detail).getByRole("button", { name: "제거" }));
+    expect(total).toHaveTextContent("1");
+    fireEvent.click(within(currentPool).getByRole("button", { name: "전체 초기화" }));
+    expect(total).toHaveTextContent("0");
+    expect(within(currentPool).queryByRole("button", { name: /하트 정보 보기/ })).not.toBeInTheDocument();
+    expect(within(currentPool).getByRole("button", { name: "전체 초기화" })).toBeDisabled();
+  });
+
+  it("selects one of five characters and starts with the fixed normal battle map", () => {
+    render(<App />);
+    enterSinglePlayer();
 
     expect(screen.getByRole("option", { name: /루키.*HP 42/ })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /건설 노동자.*HP 36/ })).toBeInTheDocument();
@@ -28,7 +111,7 @@ describe("Bingoji app flow", () => {
 
   it("centers a selected carousel character and separates the ability name from its description", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+    enterSinglePlayer();
     expect(screen.queryByRole("button", { name: "이전 캐릭터" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "다음 캐릭터" })).not.toBeInTheDocument();
     const worker = screen.getByRole("option", { name: /건설 노동자.*HP 36/ });
@@ -55,7 +138,7 @@ describe("Bingoji app flow", () => {
 
   it("moves the character carousel by dragging and keeps details on the centered card", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+    enterSinglePlayer();
     const carousel = screen.getByRole("listbox", { name: "플레이어블 캐릭터 목록" });
     const dispatchPointer = (type: string, clientX: number) => {
       const event = new Event(type, { bubbles: true });
@@ -78,7 +161,7 @@ describe("Bingoji app flow", () => {
 
   it("shows related status rules in Emoji details", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+    enterSinglePlayer();
     fireEvent.click(screen.getByRole("button", { name: "둥근 방패 정보 보기" }));
     const dialog = screen.getByRole("dialog", { name: "Emoji 정보" });
     expect(within(dialog).getByText("관련 BUFF / DEBUFF")).toBeInTheDocument();
@@ -88,7 +171,7 @@ describe("Bingoji app flow", () => {
 
   it("opens status details inline and dismisses them when another area is touched", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+    enterSinglePlayer();
     fireEvent.click(screen.getByRole("button", { name: "이 캐릭터로 시작" }));
     fireEvent.click(screen.getByRole("button", { name: "보통 난이도로 시작" }));
     fireEvent.click(screen.getByRole("button", { name: /DESTINATION.*일반 전투/ }));
@@ -104,7 +187,7 @@ describe("Bingoji app flow", () => {
 
   it("shows battle Pool selection and Emoji details in one top inventory panel", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
+    enterSinglePlayer();
     fireEvent.click(screen.getByRole("button", { name: "이 캐릭터로 시작" }));
     fireEvent.click(screen.getByRole("button", { name: "보통 난이도로 시작" }));
     fireEvent.click(screen.getByRole("button", { name: /DESTINATION.*일반 전투/ }));

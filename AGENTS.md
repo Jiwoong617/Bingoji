@@ -33,7 +33,9 @@ Bingoji는 플레이어와 적이 하나의 5×5 보드를 공유하는 이모�
 - Elite/Boss 전용 고급 AI
 - 고급 사운드 및 연출
 - 상점과 별도 유물 시스템
-- 계정, 서버 저장, 멀티플레이, 결제
+- 계정, 영구 서버 저장, 결제
+
+현재 승인된 확장 범위로 1:1 PvP 멀티플레이를 별도 진행한다. Backend는 Cloudflare Workers + 방별 Durable Objects(SQLite Storage) + WebSocket Hibernation을 사용하며, 플레이어 계정/DB 영구 저장은 추가하지 않는다. 공용 PvP 규칙과 Protocol은 `src/shared`, 서버 진입점은 `worker`에 둔다.
 
 ## 3. 권장 기술 기준
 

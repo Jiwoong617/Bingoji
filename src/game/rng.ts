@@ -15,6 +15,18 @@ export class SeededRandom implements RandomSource {
     this.state = seed >>> 0 || 0x6d2b79f5;
   }
 
+  /** Durable Object 등에 저장한 직전 상태에서 RNG를 정확히 이어갑니다. */
+  static fromState(state: number): SeededRandom {
+    const random = new SeededRandom(1);
+    random.state = state >>> 0;
+    return random;
+  }
+
+  /** 다음 Command에서 동일한 난수열을 이어가기 위한 직렬화 가능 상태입니다. */
+  snapshot(): number {
+    return this.state >>> 0;
+  }
+
   next(): number {
     let value = (this.state += 0x6d2b79f5);
     value = Math.imul(value ^ (value >>> 15), value | 1);
