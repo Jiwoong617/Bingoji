@@ -70,7 +70,7 @@ export function createStoredPvpMatch(
   return {
     ok: true,
     value: {
-      room: { ...room, revision: room.revision + 1, status: "in-game" },
+      room: { ...room, revision: room.revision + 1, status: "in-game", startsAt: null },
       match: armMatchDeadline({
         state,
         startedAt: now,
@@ -137,13 +137,20 @@ export function matchSnapshotForSeat(
       guest: playerSnapshot(room.guest, state.combat.enemy),
     },
     activeSeat: state.phase === "finished" ? null : state.activeSeat,
+    startingSeat: state.startingSeat,
     deadlineAt: state.phase === "finished" ? null : stored.deadlineAt,
     placementsRemaining: state.combat.placementsRemaining,
     lastBingo: state.combat.lastBingo ? {
       owner: state.combat.lastBingo.owner === "player" ? "host" : "guest",
       lineIds: [...state.combat.lastBingo.lineIds],
       cells: state.combat.lastBingo.cells.map((line) => [...line]),
+      icons: state.combat.lastBingo.icons.map((line) => [...line]),
       multiplier: state.combat.lastBingo.multiplier,
+    } : null,
+    lastPlacement: state.lastPlacement ? {
+      seat: state.lastPlacement.seat,
+      cellIndex: state.lastPlacement.cellIndex,
+      automatic: state.lastPlacement.automatic,
     } : null,
     privateState: {
       seat: viewerSeat,

@@ -34,6 +34,7 @@ const room: RoomSnapshot = {
   },
   guest: null,
   expiresAt: 1_800_000,
+  startsAt: null,
 };
 
 const match: PvpMatchSnapshot = {
@@ -67,9 +68,11 @@ const match: PvpMatchSnapshot = {
     },
   },
   activeSeat: "host",
+  startingSeat: "host",
   deadlineAt: 15_000,
   placementsRemaining: 1,
   lastBingo: null,
+  lastPlacement: null,
   privateState: { seat: "host", pool: profile.pool, draw: ["sword", "heart", "fire"] },
 };
 

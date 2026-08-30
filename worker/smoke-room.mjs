@@ -56,18 +56,23 @@ const joined = await request(guest, "room.join", { roomCode, profile: profile("�
 if (joined.type !== "room.joined") throw new Error("room.joined 응답이 아닙니다.");
 
 await request(host, "room.ready.set", { sessionToken: hostToken, ready: true });
-const hostStartedPromise = nextMessageOfType(host, "match.started");
+const hostStartedPromise = nextMessageOfType(host, "match.started", 8_000);
+const guestStartedPromise = nextMessageOfType(guest, "match.started", 8_000);
 const guestReady = await request(guest, "room.ready.set", {
   sessionToken: joined.payload.sessionToken,
   ready: true,
 });
+if (guestReady.type !== "room.updated" || guestReady.payload.room.status !== "starting") {
+  throw new Error("양쪽 준비 후 starting 상태가 오지 않았습니다.");
+}
 const hostStarted = await hostStartedPromise;
-if (guestReady.type !== "match.started") throw new Error("양쪽 준비 후 match.started가 오지 않았습니다.");
+const guestStarted = await guestStartedPromise;
+if (guestStarted.type !== "match.started") throw new Error("Countdown 후 match.started가 오지 않았습니다.");
 
-const activeSeat = guestReady.payload.match.activeSeat;
+const activeSeat = guestStarted.payload.match.activeSeat;
 const activeSocket = activeSeat === "host" ? host : guest;
 const activeToken = activeSeat === "host" ? hostToken : joined.payload.sessionToken;
-const activeSnapshot = activeSeat === "host" ? hostStarted.payload.match : guestReady.payload.match;
+const activeSnapshot = activeSeat === "host" ? hostStarted.payload.match : guestStarted.payload.match;
 if (activeSnapshot.privateState.draw.length !== 3) throw new Error("선공의 비공개 Draw가 없습니다.");
 
 if (timerMode) {

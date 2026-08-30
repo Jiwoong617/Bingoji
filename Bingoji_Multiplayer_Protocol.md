@@ -125,6 +125,8 @@ src/shared/multiplayer/protocol.ts# 직렬화 DTO, 메시지 Union, Runtime Deco
 
 `RoomParticipantSnapshot`은 Avatar, 닉네임, Pool 크기, 준비 및 연결 상태만 전송한다. 상대의 정확한 Pool은 포함하지 않는다.
 
+`RoomSnapshot.startsAt`은 양쪽 준비 완료 후 3초 Countdown이 끝나는 서버 시각이다. `starting` 상태에서는 이 값을 기준으로 양쪽 화면에 같은 3·2·1을 표시하고, Durable Object Alarm이 해당 시각에 Match를 한 번만 생성한다.
+
 ### 전투
 
 `PvpMatchSnapshot`에는 다음이 들어간다.
@@ -132,8 +134,9 @@ src/shared/multiplayer/protocol.ts# 직렬화 DTO, 메시지 Union, Runtime Deco
 - 25칸 Board
 - 양쪽의 공개 HP, 상태 효과와 연결 상태
 - 현재 Turn, Phase, 행동 Seat, Deadline
+- 최초 선공 Seat와 서버가 승인한 마지막 배치 Seat·Cell
 - 남은 추가 배치 수
-- 마지막 Bingo
+- 마지막 Bingo Line·Cell과 제거 전 원본 Emoji
 - 메시지를 받는 사람에게만 제공되는 `privateState`
 
 `privateState`에는 수신자의 전체 Pool과 현재 Draw만 들어간다. 상대 Pool과 Draw는 Match 종료 전까지 전송하지 않는다.
@@ -195,9 +198,9 @@ JSON.parse
 - `room.create`, `room.join`, `room.ready.set`, `room.leave`, `session.resume`, `connection.ping` 처리
 - Private Profile·Pool·Session Token을 Durable Object Storage에 보관하고 Public Snapshot에는 Pool 개수만 공개
 - Host/Guest 퇴장, 연결 상태 Broadcast, 중복 Request 응답 재사용
-- 30분 대기방 만료 Alarm과 Host·Guest 준비 완료 시 `starting` 전환
+- 30분 대기방 만료 Alarm과 Host·Guest 준비 완료 시 서버 기준 3초 `starting` Countdown
 - 실제 `wrangler dev` WebSocket Host 생성 → Guest 참가 → 양쪽 준비 Smoke Test
-- 양쪽 준비 완료 시 빈 Board·HP 30·seed 기반 선공의 권위 PvP Match 생성 및 저장
+- Countdown 완료 시 빈 Board·HP 30·seed 기반 선공의 권위 PvP Match 생성 및 저장
 - 수신 Seat의 Pool·Draw만 포함하는 `match.started`·`match.updated` Snapshot 변환
 - `match.place`의 Session·Match ID·revision·turn·Draw·Cell·행동 Seat 검증
 - `match.sync.request`, Effect Event 변환, HP 승패·무승부 `match.finished` 결과 처리
@@ -217,10 +220,11 @@ JSON.parse
 - Browser WebSocket Client의 생성·참가·준비·나가기·Session 재개 상태 머신
 - 6자리 코드 입력과 존재하지 않는 방 Popup, 방 코드 복사, 양쪽 참가자·연결·준비 상태 UI
 - 일시적 연결 종료 후 지수 Backoff 재접속과 30초 유예 내 `session.resume`
-- 실제 두 Browser 연결의 방 생성 → 코드 참가 → 양쪽 준비 → Match 시작 검증
+- 실제 두 Browser 연결의 방 생성 → 코드 참가 → 양쪽 준비 → 3·2·1 → Match 시작 검증
 - 권위 Match Snapshot 기반 5×5 Board, 자기 Draw·Pool, 선택·배치 입력 잠금
 - Server 시간 Offset을 반영한 15초 Deadline 숫자·Gauge와 시간 초과 자동 배치 반영
-- Bingo Cell·Effect log·투사체·피해/회복 HP Delta 순차 연출
+- Bingo Cell의 원본 Emoji 잔상·Effect log·투사체·피해/회복 HP Delta 순차 연출
+- 선공·후공 안내와 상대의 서버 승인 마지막 배치 Cell 강조
 - HP 종료 전 최종 Match Snapshot·Effect Event 전송과 연출 완료 후 결과 전환
 - 승리·패배·무승부·기권·연결 종료 사유와 양쪽 최종 Pool 결과 화면
 - 실제 두 Browser에서 수동 배치·Turn 동기화·자동 배치·기권 결과·Profile 유지 검증

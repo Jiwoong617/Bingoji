@@ -28,6 +28,8 @@ export interface RoomSnapshot {
   host: RoomParticipantSnapshot;
   guest: RoomParticipantSnapshot | null;
   expiresAt: number;
+  /** 양쪽 준비가 끝난 뒤 실제 Match가 생성될 Server 시각입니다. */
+  startsAt?: number | null;
 }
 
 export interface PvpStatusSnapshot {
@@ -62,7 +64,15 @@ export interface PvpBingoSnapshot {
   owner: PvpSeat;
   lineIds: string[];
   cells: number[][];
+  /** Bingo 제거 전 원본 Emoji입니다. 구버전 Server 호환을 위해 선택 값입니다. */
+  icons?: string[][];
   multiplier: number;
+}
+
+export interface PvpPlacementSnapshot {
+  seat: PvpSeat;
+  cellIndex: number;
+  automatic: boolean;
 }
 
 export interface PvpPrivateMatchState {
@@ -82,9 +92,13 @@ export interface PvpMatchSnapshot {
   board: Array<PvpBoardCellSnapshot | null>;
   players: Record<PvpSeat, PvpPlayerSnapshot>;
   activeSeat: PvpSeat | null;
+  /** 최초 선공 자리입니다. 구버전 Server 호환을 위해 선택 값입니다. */
+  startingSeat?: PvpSeat;
   deadlineAt: number | null;
   placementsRemaining: number;
   lastBingo: PvpBingoSnapshot | null;
+  /** Server가 확정한 가장 최근 배치입니다. */
+  lastPlacement?: PvpPlacementSnapshot | null;
   privateState: PvpPrivateMatchState;
 }
 
@@ -320,7 +334,8 @@ function isRoomSnapshot(value: unknown): value is RoomSnapshot {
     && isRoomParticipant(value.host)
     && value.host.seat === "host"
     && (value.guest === null || (isRoomParticipant(value.guest) && value.guest.seat === "guest"))
-    && isFiniteNumber(value.expiresAt);
+    && isFiniteNumber(value.expiresAt)
+    && (value.startsAt === undefined || value.startsAt === null || isFiniteNumber(value.startsAt));
 }
 
 function isStatus(value: unknown): value is PvpStatusSnapshot {
@@ -363,7 +378,19 @@ function isBingo(value: unknown): value is PvpBingoSnapshot {
     && value.lineIds.every((item) => isBoundedString(item, 64))
     && Array.isArray(value.cells)
     && value.cells.every((line) => Array.isArray(line) && line.every((cell) => isNonNegativeInteger(cell) && cell < 25))
+    && (value.icons === undefined || (
+      Array.isArray(value.icons)
+      && value.icons.every((line) => Array.isArray(line) && line.every((icon) => typeof icon === "string"))
+    ))
     && isNonNegativeInteger(value.multiplier);
+}
+
+function isPlacementSnapshot(value: unknown): value is PvpPlacementSnapshot {
+  return isRecord(value)
+    && isSeat(value.seat)
+    && isNonNegativeInteger(value.cellIndex)
+    && value.cellIndex < 25
+    && typeof value.automatic === "boolean";
 }
 
 function isPrivateMatchState(value: unknown): value is PvpPrivateMatchState {
@@ -388,9 +415,11 @@ function isMatchSnapshot(value: unknown): value is PvpMatchSnapshot {
     && isPlayerSnapshot(value.players.guest)
     && value.players.guest.seat === "guest"
     && (value.activeSeat === null || isSeat(value.activeSeat))
+    && (value.startingSeat === undefined || isSeat(value.startingSeat))
     && (value.deadlineAt === null || isFiniteNumber(value.deadlineAt))
     && isNonNegativeInteger(value.placementsRemaining)
     && (value.lastBingo === null || isBingo(value.lastBingo))
+    && (value.lastPlacement === undefined || value.lastPlacement === null || isPlacementSnapshot(value.lastPlacement))
     && isPrivateMatchState(value.privateState);
 }
 

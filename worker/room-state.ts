@@ -1,4 +1,5 @@
 import {
+  PVP_MATCH_START_COUNTDOWN_MS,
   poolSize,
   validateMultiplayerProfile,
   type MultiplayerErrorCode,
@@ -30,6 +31,7 @@ export interface StoredRoomState {
   guest: StoredRoomParticipant | null;
   createdAt: number;
   expiresAt: number;
+  startsAt: number | null;
 }
 
 export interface RoomOperationError {
@@ -104,6 +106,7 @@ export function roomSnapshot(room: StoredRoomState): RoomSnapshot {
     host: publicParticipant(room.host),
     guest: room.guest ? publicParticipant(room.guest) : null,
     expiresAt: room.expiresAt,
+    startsAt: room.startsAt ?? null,
   };
 }
 
@@ -130,6 +133,7 @@ export function createWaitingRoom(
     guest: null,
     createdAt: now,
     expiresAt: now + ROOM_TTL_MS,
+    startsAt: null,
   };
   return { ok: true, value: { room, participant: host } };
 }
@@ -175,6 +179,7 @@ export function setRoomReady(
   room: StoredRoomState,
   sessionToken: string,
   ready: boolean,
+  now: number,
 ): RoomOperationResult<StoredRoomState> {
   if (room.status !== "waiting") {
     return { ok: false, error: { code: "room-started", message: "이미 게임 시작 절차가 진행 중입니다.", retryable: false } };
@@ -195,6 +200,7 @@ export function setRoomReady(
       ...room,
       revision: room.revision + 1,
       status: bothReady ? "starting" : "waiting",
+      startsAt: bothReady ? now + PVP_MATCH_START_COUNTDOWN_MS : null,
       host,
       guest,
     },
@@ -241,6 +247,7 @@ export function leaveWaitingRoom(
         ...room,
         revision: room.revision + 1,
         status: "waiting",
+        startsAt: null,
         host: { ...room.host, ready: false },
         guest: null,
       },

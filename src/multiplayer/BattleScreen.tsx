@@ -17,6 +17,8 @@ import {
 } from "../shared";
 import type { MultiplayerClientState } from "./client";
 
+const PVP_INITIATIVE_NOTICE_MS = 2_200;
+
 function otherSeat(seat: PvpSeat): PvpSeat {
   return seat === "host" ? "guest" : "host";
 }
@@ -219,6 +221,7 @@ export function MultiplayerBattleScreen({
   const [presenting, setPresenting] = useState(false);
   const [forfeitConfirmOpen, setForfeitConfirmOpen] = useState(false);
   const [impactActive, setImpactActive] = useState(false);
+  const [initiativeVisible, setInitiativeVisible] = useState(() => match.revision === 0 && match.turn === 1);
   const [resolvedBatchKey, setResolvedBatchKey] = useState("");
   const previousHp = useRef({ host: match.players.host.hp, guest: match.players.guest.hp });
   const cancelForfeitRef = useRef<HTMLButtonElement>(null);
@@ -231,6 +234,12 @@ export function MultiplayerBattleScreen({
   }, []);
 
   useEffect(() => setSelectedCell(null), [match.revision, match.activeSeat]);
+
+  useEffect(() => {
+    if (!initiativeVisible) return;
+    const timer = window.setTimeout(() => setInitiativeVisible(false), PVP_INITIATIVE_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [initiativeVisible]);
 
   useEffect(() => {
     const nextHp = { host: match.players.host.hp, guest: match.players.guest.hp };
@@ -277,10 +286,26 @@ export function MultiplayerBattleScreen({
   const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1_000));
   const timerRatio = Math.max(0, Math.min(100, remainingMs / PVP_TURN_TIMEOUT_MS * 100));
   const bingoCells = new Set(match.lastBingo?.cells.flat() ?? []);
+  const bingoAfterimages = new Map<number, string>();
+  match.lastBingo?.cells.forEach((line, lineIndex) => {
+    line.forEach((cellIndex, iconIndex) => {
+      const icon = match.lastBingo?.icons?.[lineIndex]?.[iconIndex];
+      if (icon && !bingoAfterimages.has(cellIndex)) bingoAfterimages.set(cellIndex, icon);
+    });
+  });
+  const opponentLastPlacement = match.lastPlacement?.seat === opponentSeat ? match.lastPlacement.cellIndex : null;
+  const startingSeat = match.startingSeat ?? (match.turn === 1 ? match.activeSeat : null);
   const turnCopy = presenting ? "Bingo 효과 처리 중…" : clientState.placementPending ? "Server의 배치 승인을 기다리는 중…" : myTurn ? "빈칸을 고른 뒤 Emoji를 배치하세요" : "상대가 Emoji를 고르는 중…";
 
   return (
     <main className="game-shell battle-screen pvp-battle-screen" onClick={() => setSelectedCell(null)}>
+      {initiativeVisible && startingSeat && (
+        <div className={`initiative-notice ${startingSeat === mine ? "first" : "second"}`} role="status" aria-live="polite">
+          <small>{startingSeat === mine ? "FIRST MOVE" : "SECOND MOVE"}</small>
+          <strong>{startingSeat === mine ? "당신은 선공입니다" : "당신은 후공입니다"}</strong>
+          <span>{startingSeat === mine ? "먼저 Emoji를 배치하세요." : "상대가 먼저 배치합니다."}</span>
+        </div>
+      )}
       <header className="pvp-match-header">
         <div><small>ROOM</small><strong>{clientState.room?.roomCode}</strong></div>
         <div className={`pvp-timer ${remainingSeconds <= 5 ? "urgent" : ""}`} aria-label={`배치 제한 시간 ${remainingSeconds}초`}>
@@ -304,20 +329,21 @@ export function MultiplayerBattleScreen({
           {match.board.map((cell, index) => {
             const selected = selectedCell === index;
             const bingo = presenting && bingoCells.has(index);
+            const opponentPlaced = opponentLastPlacement === index;
             return (
               <button
                 key={index}
-                className={`board-cell ${cell ? `occupied ${cell.placedBy === mine ? "player" : "enemy"}` : "empty"} ${selected ? "selected" : ""} ${bingo ? `bingo-complete bingo-${match.lastBingo?.owner === mine ? "player" : "enemy"}` : ""}`}
+                className={`board-cell ${cell ? `occupied ${cell.placedBy === mine ? "player" : "enemy"}` : "empty"} ${selected ? "selected" : ""} ${opponentPlaced ? "opponent-last-move" : ""} ${bingo ? `bingo-complete bingo-${match.lastBingo?.owner === mine ? "player" : "enemy"}` : ""}`}
                 type="button"
                 role="gridcell"
                 aria-pressed={selected}
-                aria-label={cell ? `${EMOJIS[cell.emojiId].name}, ${cell.placedBy === mine ? "내" : "상대"} 배치` : `${Math.floor(index / 5) + 1}행 ${index % 5 + 1}열 빈칸`}
+                aria-label={`${cell ? `${EMOJIS[cell.emojiId].name}, ${cell.placedBy === mine ? "내" : "상대"} 배치` : `${Math.floor(index / 5) + 1}행 ${index % 5 + 1}열 빈칸`}${opponentPlaced ? ", 상대가 방금 선택한 칸" : ""}`}
                 onClick={() => {
                   if (cell) onInfo(cell.emojiId);
                   else if (!interactionLocked) setSelectedCell((current) => current === index ? null : index);
                 }}
               >
-                {cell ? <><span>{EMOJIS[cell.emojiId].icon}</span><i />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingo ? <span className="bingo-afterimage">✨</span> : <span className="cell-plus">+</span>}
+                {cell ? <><span>{EMOJIS[cell.emojiId].icon}</span><i />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingo && bingoAfterimages.has(index) ? <span className="bingo-afterimage">{bingoAfterimages.get(index)}</span> : <span className="cell-plus">+</span>}
               </button>
             );
           })}
@@ -352,7 +378,7 @@ export function MultiplayerBattleScreen({
         <Modal title="기권하고 나가시겠습니까?" onClose={() => setForfeitConfirmOpen(false)} cardClassName="confirmation-modal" initialFocusRef={cancelForfeitRef}>
           <p className="confirmation-copy">기권하면 즉시 패배 처리되며 현재 대전으로 돌아올 수 없습니다.</p>
           <div className="confirmation-actions">
-            <button ref={cancelForfeitRef} className="secondary-button" type="button" onClick={() => setForfeitConfirmOpen(false)}>취소</button>
+            <button ref={cancelForfeitRef} className="ghost-button" type="button" onClick={() => setForfeitConfirmOpen(false)}>취소</button>
             <button className="danger-button" type="button" onClick={() => { setForfeitConfirmOpen(false); onForfeit(); }}>기권</button>
           </div>
         </Modal>

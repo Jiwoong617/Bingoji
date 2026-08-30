@@ -83,31 +83,32 @@ describe("waiting room state", () => {
   it("allows the host to ready before a guest joins", () => {
     const created = createWaitingRoom("ABC234", profile("호스트"), { playerId: "host-id", sessionToken: "host-token" }, 0);
     if (!created.ok) throw new Error(created.error.message);
-    const ready = setRoomReady(created.value.room, "host-token", true);
+    const ready = setRoomReady(created.value.room, "host-token", true, 1_000);
     expect(ready.ok && ready.value.host.ready).toBe(true);
     expect(ready.ok && ready.value.status).toBe("waiting");
   });
 
   it("moves to starting exactly when both participants are ready", () => {
     let room = roomWithGuest();
-    const hostReady = setRoomReady(room, "host-token", true);
+    const hostReady = setRoomReady(room, "host-token", true, 1_000);
     if (!hostReady.ok) throw new Error(hostReady.error.message);
     room = hostReady.value;
     expect(room.status).toBe("waiting");
-    const guestReady = setRoomReady(room, "guest-token", true);
+    const guestReady = setRoomReady(room, "guest-token", true, 1_500);
     expect(guestReady.ok && guestReady.value.status).toBe("starting");
     expect(guestReady.ok && guestReady.value.revision).toBe(room.revision + 1);
+    expect(guestReady.ok && guestReady.value.startsAt).toBe(4_500);
   });
 
   it("does not increment revision for an idempotent ready value", () => {
     const room = roomWithGuest();
-    const unchanged = setRoomReady(room, "host-token", false);
+    const unchanged = setRoomReady(room, "host-token", false, 1_000);
     expect(unchanged.ok && unchanged.value).toBe(room);
   });
 
   it("guest leave frees the seat and clears host readiness", () => {
     let room = roomWithGuest();
-    const ready = setRoomReady(room, "host-token", true);
+    const ready = setRoomReady(room, "host-token", true, 1_000);
     if (!ready.ok) throw new Error(ready.error.message);
     room = ready.value;
     const left = leaveWaitingRoom(room, "guest-token");

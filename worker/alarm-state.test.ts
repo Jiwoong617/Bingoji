@@ -27,9 +27,9 @@ function activeRoomAndMatch() {
     sessionToken: "guest-token",
   }, 1);
   if (!joined.ok) throw new Error(joined.error.message);
-  const hostReady = setRoomReady(joined.value.room, "host-token", true);
+  const hostReady = setRoomReady(joined.value.room, "host-token", true, 100);
   if (!hostReady.ok) throw new Error(hostReady.error.message);
-  const guestReady = setRoomReady(hostReady.value, "guest-token", true);
+  const guestReady = setRoomReady(hostReady.value, "guest-token", true, 200);
   if (!guestReady.ok) throw new Error(guestReady.error.message);
   const started = createStoredPvpMatch(guestReady.value, "match-id", 2026, 1_000);
   if (!started.ok) throw new Error(started.error.message);
@@ -37,6 +37,24 @@ function activeRoomAndMatch() {
 }
 
 describe("Durable Object Alarm schedule", () => {
+  it("schedules the authoritative Match start after the ready countdown", () => {
+    const created = createWaitingRoom("ABC234", profile("🙂", "호스트"), {
+      playerId: "host-id",
+      sessionToken: "host-token",
+    }, 0);
+    if (!created.ok) throw new Error(created.error.message);
+    const joined = joinWaitingRoom(created.value.room, "ABC234", profile("😎", "게스트"), {
+      playerId: "guest-id",
+      sessionToken: "guest-token",
+    }, 1);
+    if (!joined.ok) throw new Error(joined.error.message);
+    const hostReady = setRoomReady(joined.value.room, "host-token", true, 100);
+    if (!hostReady.ok) throw new Error(hostReady.error.message);
+    const starting = setRoomReady(hostReady.value, "guest-token", true, 200);
+    if (!starting.ok) throw new Error(starting.error.message);
+    expect(nextRoomAlarmAt(starting.value, null, 200)).toBe(starting.value.startsAt);
+  });
+
   it("uses the current placement deadline", () => {
     const { room, match } = activeRoomAndMatch();
     expect(nextRoomAlarmAt(room, match, 1_000)).toBe((match.deadlineAt ?? 0) + PVP_PLACEMENT_GRACE_MS);

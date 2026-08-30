@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { isRoomCode, type MultiplayerProfile, type RoomParticipantSnapshot } from "../shared";
+import { useEffect, useState } from "react";
+import { PVP_MATCH_START_COUNTDOWN_MS, isRoomCode, type MultiplayerProfile, type RoomParticipantSnapshot } from "../shared";
 import type { MultiplayerClientState } from "./client";
 import type { MultiplayerRoomAction } from "./ProfileScreen";
 
@@ -48,10 +48,22 @@ export function MultiplayerRoomScreen({
 }) {
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [copied, setCopied] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const room = clientState.room;
   const myParticipant = clientState.seat === "host" ? room?.host : room?.guest;
   const opponent = clientState.seat === "host" ? room?.guest : room?.host;
   const normalizedCode = roomCodeInput.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/gu, "").slice(0, 6);
+  const serverNow = now + clientState.serverTimeOffsetMs;
+  const countdown = room?.status === "starting"
+    ? Math.max(1, Math.ceil(((room.startsAt ?? serverNow + PVP_MATCH_START_COUNTDOWN_MS) - serverNow) / 1_000))
+    : null;
+
+  useEffect(() => {
+    if (room?.status !== "starting") return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, [room?.startsAt, room?.status]);
 
   const copyRoomCode = async () => {
     if (!room) return;
@@ -132,7 +144,9 @@ export function MultiplayerRoomScreen({
       </section>
 
       <section className="room-status-panel" aria-live="polite">
-        {clientState.match ? (
+        {room.status === "starting" ? (
+          <><span>⚔️</span><strong>게임이 시작됩니다.</strong><p className="match-start-countdown" aria-label="게임 시작 카운트다운">{countdown}</p></>
+        ) : clientState.match ? (
           <><span>⚔️</span><strong>대전이 시작되었습니다.</strong><p>다음 전투 화면을 불러오는 중입니다.</p></>
         ) : opponent ? (
           <><span>{myParticipant?.ready && opponent.ready ? "⚔️" : "✅"}</span><strong>{myParticipant?.ready ? "상대의 준비를 기다리는 중" : "두 플레이어가 준비하면 시작합니다."}</strong><p>상대의 정확한 Pool 구성은 결과 화면에서 공개됩니다.</p></>
@@ -143,8 +157,8 @@ export function MultiplayerRoomScreen({
 
       <div className="room-actions">
         <button className="danger-button" type="button" onClick={onLeave}>방 나가기</button>
-        <button className={myParticipant?.ready ? "ghost-button" : "primary-button"} type="button" disabled={!opponent || Boolean(clientState.match)} onClick={() => onReady(!myParticipant?.ready)}>
-          {myParticipant?.ready ? "준비 취소" : "준비"}
+        <button className={myParticipant?.ready ? "ghost-button" : "primary-button"} type="button" disabled={!opponent || room.status !== "waiting" || Boolean(clientState.match)} onClick={() => onReady(!myParticipant?.ready)}>
+          {room.status === "starting" ? "시작 준비 중" : myParticipant?.ready ? "준비 취소" : "준비"}
         </button>
       </div>
 

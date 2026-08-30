@@ -13,7 +13,12 @@ export function nextRoomAlarmAt(
 ): number | null {
   const candidates: number[] = [];
 
-  if (room.status === "waiting" || room.status === "starting" || room.status === "finished") {
+  if (room.status === "waiting" || room.status === "finished") {
+    candidates.push(Math.max(now, room.expiresAt));
+  }
+
+  if (room.status === "starting") {
+    candidates.push(Math.max(now, room.startsAt ?? now));
     candidates.push(Math.max(now, room.expiresAt));
   }
 

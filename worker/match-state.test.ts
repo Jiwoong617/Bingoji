@@ -37,9 +37,9 @@ function readyRoom() {
     sessionToken: "guest-token",
   }, 1_100);
   if (!joined.ok) throw new Error(joined.error.message);
-  const hostReady = setRoomReady(joined.value.room, "host-token", true);
+  const hostReady = setRoomReady(joined.value.room, "host-token", true, 1_200);
   if (!hostReady.ok) throw new Error(hostReady.error.message);
-  const guestReady = setRoomReady(hostReady.value, "guest-token", true);
+  const guestReady = setRoomReady(hostReady.value, "guest-token", true, 1_300);
   if (!guestReady.ok) throw new Error(guestReady.error.message);
   return guestReady.value;
 }
@@ -57,6 +57,8 @@ describe("Durable Object PvP Match adapter", () => {
     expect(match.state.combat.board.every((cell) => cell === null)).toBe(true);
     expect(match.state.combat.player.hp).toBe(30);
     expect(match.state.combat.enemy.hp).toBe(30);
+    expect(room.startsAt).toBeNull();
+    expect(matchSnapshotForSeat(match, room, "host").startingSeat).toBe(match.state.startingSeat);
     expect(match.deadlineAt).toBe(2_000 + PVP_TURN_TIMEOUT_MS);
     expect(isMatchDeadlineCurrent(match)).toBe(true);
   });
@@ -106,7 +108,7 @@ describe("Durable Object PvP Match adapter", () => {
   });
 
   it("applies an accepted placement and returns protocol effect events", () => {
-    const { match } = activeMatch();
+    const { room, match } = activeMatch();
     const placed = placeInStoredMatch(match, match.state.activeSeat, {
       matchId: match.state.matchId,
       expectedRevision: match.state.revision,
@@ -119,11 +121,16 @@ describe("Durable Object PvP Match adapter", () => {
     expect(placed.value.state.revision).toBe(1);
     expect(placed.value.state.combat.board[0]).not.toBeNull();
     expect(matchEffectEvents(placed.value).every((event) => "eventId" in event)).toBe(true);
+    expect(matchSnapshotForSeat(placed.value, room, "host").lastPlacement).toMatchObject({
+      seat: match.state.activeSeat,
+      cellIndex: 0,
+      automatic: false,
+    });
     expect(placed.value.deadlineAt).toBe(3_000 + PVP_TURN_TIMEOUT_MS);
   });
 
   it("starts the next full Turn timer only after Bingo presentation", () => {
-    const { match } = activeMatch();
+    const { room, match } = activeMatch();
     for (let index = 0; index < 4; index += 1) {
       match.state.combat.board[index] = { emojiId: "sword", placedBy: "player" };
     }
@@ -137,6 +144,11 @@ describe("Durable Object PvP Match adapter", () => {
 
     expect(placed.ok && placed.value.state.combat.lastBingo).not.toBeNull();
     expect(placed.ok && placed.value.deadlineAt).toBe(3_000 + PVP_BINGO_PRESENTATION_MS + PVP_TURN_TIMEOUT_MS);
+    if (placed.ok) {
+      const snapshot = matchSnapshotForSeat(placed.value, room, "host");
+      expect(snapshot.lastBingo?.icons?.[0]).toHaveLength(5);
+      expect(snapshot.lastBingo?.icons?.[0].every(Boolean)).toBe(true);
+    }
   });
 
   it("auto-places deterministically only for the current expired deadline", () => {

@@ -9,6 +9,7 @@ export const PVP_POOL_MAX_SIZE = 15;
 export const PVP_MAX_COPIES_PER_EMOJI = 2;
 export const PVP_MAX_UNCOMMON = 8;
 export const PVP_MAX_RARE = 4;
+export const PVP_MATCH_START_COUNTDOWN_MS = 3_000;
 
 export const PVP_EXCLUDED_EMOJI_IDS = ["event_egg", "event_baby"] as const;
 const excludedEmojiIds = new Set<string>(PVP_EXCLUDED_EMOJI_IDS);

@@ -154,7 +154,25 @@ export class BingojiRoom extends DurableObject<Env> {
     if (!room) return;
     const now = Date.now();
 
-    if (room.status === "waiting" || room.status === "starting" || room.status === "finished") {
+    if (room.status === "starting") {
+      const startsAt = room.startsAt ?? now;
+      if (startsAt > now) {
+        await this.ctx.storage.setAlarm(startsAt);
+        return;
+      }
+      const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+      const started = createStoredPvpMatch(room, crypto.randomUUID(), seed, now);
+      if (!started.ok) {
+        await this.closeForServerError(started.error.message);
+        return;
+      }
+      await this.persistRoomAndMatch(started.value.room, started.value.match);
+      await this.scheduleNextAlarm(started.value.room, started.value.match);
+      this.sendMatchStarted(started.value.room, started.value.match);
+      return;
+    }
+
+    if (room.status === "waiting" || room.status === "finished") {
       if (room.expiresAt > now) {
         await this.ctx.storage.setAlarm(room.expiresAt);
         return;
@@ -336,24 +354,13 @@ export class BingojiRoom extends DurableObject<Env> {
       this.sendUnauthorized(socket, message.requestId);
       return;
     }
-    const updated = setRoomReady(room, message.payload.sessionToken, message.payload.ready);
+    const updated = setRoomReady(room, message.payload.sessionToken, message.payload.ready, Date.now());
     if (!updated.ok) {
       this.sendError(socket, message.requestId, updated.error);
       return;
     }
-    if (updated.value.status === "starting") {
-      const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-      const started = createStoredPvpMatch(updated.value, crypto.randomUUID(), seed, Date.now());
-      if (!started.ok) {
-        this.sendError(socket, message.requestId, started.error);
-        return;
-      }
-      await this.persistRoomAndMatch(started.value.room, started.value.match);
-      await this.scheduleNextAlarm(started.value.room, started.value.match);
-      this.sendMatchStarted(started.value.room, started.value.match, socket, message.requestId);
-      return;
-    }
     if (updated.value !== room) await this.persist(updated.value);
+    if (updated.value.status === "starting") await this.scheduleNextAlarm(updated.value, null);
     const response: ServerMessage = {
       ...messageBase(message.requestId),
       type: "room.updated",
@@ -786,8 +793,8 @@ export class BingojiRoom extends DurableObject<Env> {
   private sendMatchStarted(
     room: StoredRoomState,
     match: StoredPvpMatch,
-    requestSocket: WebSocket,
-    requestId: string,
+    requestSocket?: WebSocket,
+    requestId?: string,
   ): void {
     this.forEachParticipantSocket(room, (socket, seat) => {
       const response: ServerMessage = {
@@ -795,7 +802,7 @@ export class BingojiRoom extends DurableObject<Env> {
         type: "match.started",
         payload: { match: matchSnapshotForSeat(match, room, seat) },
       };
-      if (socket === requestSocket) this.reply(socket, response);
+      if (requestSocket && socket === requestSocket && requestId) this.reply(socket, response);
       else socket.send(serializeMultiplayerMessage(response));
     });
   }
