@@ -832,14 +832,29 @@ function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { ru
 }
 
 function RestScreen({ run, healed, onContinue }: { run: RunProgress; healed: number; onContinue: () => void }) {
+  const [animating, setAnimating] = useState(true);
+  const [shownHp, setShownHp] = useState(() => Math.max(0, run.player.hp - healed));
+
+  useEffect(() => {
+    setAnimating(true);
+    setShownHp(Math.max(0, run.player.hp - healed));
+    const reducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const healTimer = window.setTimeout(() => setShownHp(run.player.hp), reducedMotion ? 0 : 650);
+    const finishTimer = window.setTimeout(() => setAnimating(false), reducedMotion ? 0 : 1_450);
+    return () => {
+      window.clearTimeout(healTimer);
+      window.clearTimeout(finishTimer);
+    };
+  }, [healed, run.player.hp]);
+
   return (
-    <main className="center-screen rest-screen">
+    <main className={`center-screen rest-screen ${animating ? "rest-animating" : ""}`}>
       <section className="story-card">
         <p className="eyebrow">REST AREA</p>
         <span className="story-icon campfire">🔥</span>
         <h1>잠시 쉬어갑니다</h1>
         <p className="story-copy">따뜻한 모닥불 앞에서 다음 Bingo를 준비했습니다.</p>
-        <div className="rest-result"><strong>HP +{healed}</strong><HpBar hp={run.player.hp} maxHp={run.player.maxHp} tone="player" /></div>
+        <div className="rest-result"><strong>HP +{healed}</strong><HpBar hp={shownHp} maxHp={run.player.maxHp} tone="player" /></div>
         <button className="primary-button wide" type="button" onClick={onContinue}>다음 Map으로</button>
       </section>
     </main>

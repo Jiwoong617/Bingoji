@@ -21,7 +21,7 @@ export const CHARACTERS: CharacterDefinition[] = [
     maxHp: 42,
     ability: "고유 능력은 없지만 가장 높은 HP로 안정적으로 전투를 배웁니다.",
     abilityId: "none",
-    startingPool: { sword: 3, heart: 1, shield: 2, bandage: 1, starlight: 1, fire: 1 },
+    startingPool: { sword: 3, heart: 1, extra_turn: 1, shield: 2, bandage: 1, starlight: 1, fire: 1 },
     rewardPool: CHARACTER_REWARD_POOLS.rookie,
   },
   {
@@ -31,7 +31,7 @@ export const CHARACTERS: CharacterDefinition[] = [
     maxHp: 36,
     ability: "안전 제일: 자신의 Turn에 처음 얻는 방어막이 3 증가합니다.",
     abilityId: "worker",
-    startingPool: { sword: 3, heart: 1, shield: 2, brick: 1, hedgehog: 1, shell: 1 },
+    startingPool: { sword: 3, heart: 1, extra_turn: 1, shield: 2, brick: 1, hedgehog: 1, shell: 1 },
     rewardPool: CHARACTER_REWARD_POOLS.worker,
   },
   {
@@ -41,7 +41,7 @@ export const CHARACTERS: CharacterDefinition[] = [
     maxHp: 30,
     ability: "제발 한 대만: 기본 치명타 확률이 10% 증가합니다. 실패한 치명타를 피해 효과마다 한 번 재판정하고 HP 1을 잃습니다.",
     abilityId: "clown",
-    startingPool: { sword: 3, heart: 1, clover: 1, dice: 1, target: 1, coin: 1, clown_card: 1 },
+    startingPool: { sword: 3, heart: 1, extra_turn: 1, clover: 1, dice: 1, target: 1, coin: 1, clown_card: 1 },
     rewardPool: CHARACTER_REWARD_POOLS.clown,
   },
   {
@@ -51,7 +51,7 @@ export const CHARACTERS: CharacterDefinition[] = [
     maxHp: 32,
     ability: "실험 증폭: 각 Bingo에서 처음 얻는 충전과 처음 부여하는 독이 1 증가합니다.",
     abilityId: "scientist",
-    startingPool: { sword: 3, heart: 1, germ: 1, spider: 1, battery: 2, catalyst: 1 },
+    startingPool: { sword: 3, heart: 1, extra_turn: 1, germ: 1, spider: 1, battery: 2, catalyst: 1 },
     rewardPool: CHARACTER_REWARD_POOLS.scientist,
   },
   {
@@ -61,7 +61,7 @@ export const CHARACTERS: CharacterDefinition[] = [
     maxHp: 34,
     ability: "분노 폭주: 잃은 HP 비율에 따라 직접 피해가 증가하지만 적의 피해와 독을 2배로 받습니다.",
     abilityId: "rage",
-    startingPool: { sword: 3, heart: 1, blood: 2, fire: 1, rage_mark: 1, rage_fist: 1 },
+    startingPool: { sword: 3, heart: 1, extra_turn: 1, blood: 2, fire: 1, rage_mark: 1, rage_fist: 1 },
     rewardPool: CHARACTER_REWARD_POOLS.rage,
   },
 ];
@@ -98,7 +98,7 @@ export function validateContent(): string[] {
   };
   CHARACTERS.forEach((item) => {
     validatePool(`캐릭터 ${item.id}`, item.startingPool);
-    if (Object.values(item.startingPool).reduce((sum, count) => sum + count, 0) !== 9) errors.push(`캐릭터 ${item.id}: 시작 Pool이 9개가 아님`);
+    if (Object.values(item.startingPool).reduce((sum, count) => sum + count, 0) !== 10) errors.push(`캐릭터 ${item.id}: 시작 Pool이 10개가 아님`);
     item.rewardPool.forEach((id) => { if (!EMOJIS[id]) errors.push(`캐릭터 ${item.id}: 알 수 없는 보상 ${id}`); });
   });
   const enemyIds = ENEMIES.map((item) => item.id);

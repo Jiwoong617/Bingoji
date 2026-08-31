@@ -440,6 +440,12 @@ h1, h2, h3, p { margin-top: 0; }
 @keyframes fireGlow { to { filter: drop-shadow(0 0 30px rgba(255,176,62,.75)); transform: scale(1.04); } }
 .rest-result { margin: 28px 0; padding: 18px; border: 1px solid rgba(105,230,166,.25); border-radius: 16px; background: rgba(105,230,166,.07); }
 .rest-result > strong { display: block; margin-bottom: 12px; color: var(--green); font-size: 1.4rem; }
+.rest-result .hp-fill { transition-duration: .65s; }
+.rest-screen::after { content: ""; position: fixed; inset: 0; z-index: 45; pointer-events: none; background: #080711; opacity: 0; }
+.rest-screen.rest-animating::after { animation: restFade 1.45s ease-in-out both; }
+.rest-screen.rest-animating .story-card { animation: restReturn 1.45s ease-in-out both; }
+@keyframes restFade { 0%, 100% { opacity: 0; } 38%, 52% { opacity: .9; } }
+@keyframes restReturn { 0%, 28% { transform: scale(1); filter: brightness(1); } 45% { transform: scale(.985); filter: brightness(.65); } 72%, 100% { transform: scale(1); filter: brightness(1); } }
 
 .result-card { width: min(600px, 100%); }
 .result-screen.clear .result-card { border-color: rgba(255,208,90,.5); }

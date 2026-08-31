@@ -7,7 +7,7 @@ describe("expanded content registry", () => {
     expect(validateContent()).toEqual([]);
   });
 
-  it("provides five person-like characters with fixed nine Emoji starts", () => {
+  it("provides five person-like characters with fixed ten Emoji starts", () => {
     expect(CHARACTERS).toHaveLength(5);
     const rookie = CHARACTERS.find((item) => item.id === "rookie")!;
     expect(rookie.abilityId).toBe("none");
@@ -15,7 +15,8 @@ describe("expanded content registry", () => {
     for (const character of CHARACTERS) {
       expect(character.startingPool.sword).toBe(3);
       expect(character.startingPool.heart).toBe(1);
-      expect(Object.values(character.startingPool).reduce((sum, count) => sum + count, 0)).toBe(9);
+      expect(character.startingPool.extra_turn).toBe(1);
+      expect(Object.values(character.startingPool).reduce((sum, count) => sum + count, 0)).toBe(10);
       expect(character.rewardPool).toHaveLength(9);
     }
   });
