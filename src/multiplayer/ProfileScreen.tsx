@@ -4,11 +4,11 @@ import { EMOJIS } from "../content/emojis";
 import type { Pool, Rarity } from "../game/types";
 import {
   PVP_EMOJI_IDS,
-  PVP_MAX_COPIES_PER_EMOJI,
   PVP_MAX_RARE,
   PVP_MAX_UNCOMMON,
   PVP_POOL_MAX_SIZE,
   PVP_POOL_MIN_SIZE,
+  pvpMaxCopiesForEmoji,
   validateMultiplayerProfile,
   type MultiplayerProfile,
 } from "../shared";
@@ -31,9 +31,12 @@ const RARITY_LABEL: Record<Rarity, string> = {
 
 function addBlockedReason(pool: Pool, emojiId: string): string | null {
   const emoji = EMOJIS[emojiId];
+  const maxCopies = pvpMaxCopiesForEmoji(emojiId);
   const validation = validateMultiplayerProfile({ avatar: "🙂", nickname: "검사용", pool });
   if (validation.pool.total >= PVP_POOL_MAX_SIZE) return `Pool은 최대 ${PVP_POOL_MAX_SIZE}개입니다.`;
-  if ((pool[emojiId] ?? 0) >= PVP_MAX_COPIES_PER_EMOJI) return `같은 Emoji는 최대 ${PVP_MAX_COPIES_PER_EMOJI}개입니다.`;
+  if ((pool[emojiId] ?? 0) >= maxCopies) {
+    return maxCopies === 1 ? "추가 배치 Emoji는 종류별 최대 1개입니다." : `같은 Emoji는 최대 ${maxCopies}개입니다.`;
+  }
   if (emoji.rarity === "uncommon" && validation.pool.rarityCounts.uncommon >= PVP_MAX_UNCOMMON) return `고급 Emoji는 최대 ${PVP_MAX_UNCOMMON}개입니다.`;
   if (emoji.rarity === "rare" && validation.pool.rarityCounts.rare >= PVP_MAX_RARE) return `희귀 Emoji는 최대 ${PVP_MAX_RARE}개입니다.`;
   return null;
@@ -149,19 +152,20 @@ export function MultiplayerProfileScreen({
               {visibleEmojiIds.map((emojiId) => {
                 const emoji = EMOJIS[emojiId];
                 const count = draft.pool[emojiId] ?? 0;
+                const maxCopies = pvpMaxCopiesForEmoji(emojiId);
                 return (
                   <button
                     key={emojiId}
                     type="button"
                     className={`pvp-emoji-card rarity-${emoji.rarity} ${selectedEmojiId === emojiId ? "selected" : ""}`}
-                    aria-label={`${emoji.name} 정보 보기, Pool ${count}/${PVP_MAX_COPIES_PER_EMOJI}`}
+                    aria-label={`${emoji.name} 정보 보기, Pool ${count}/${maxCopies}`}
                     aria-pressed={selectedEmojiId === emojiId}
                     onClick={() => {
                       setSelectedEmojiId(emojiId);
                       setNotice("");
                     }}
                   >
-                    <span>{emoji.icon}</span><strong>{emoji.name}</strong><small>{RARITY_LABEL[emoji.rarity]} · {count}/{PVP_MAX_COPIES_PER_EMOJI}</small>
+                    <span>{emoji.icon}</span><strong>{emoji.name}</strong><small>{RARITY_LABEL[emoji.rarity]} · {count}/{maxCopies}</small>
                   </button>
                 );
               })}
@@ -170,7 +174,7 @@ export function MultiplayerProfileScreen({
 
           <div className="pvp-pool-sidebar">
             <section className="pvp-selected-detail" aria-label="선택한 Emoji 정보">
-              <div className="copy-counter"><strong>{draft.pool[selectedEmojiId] ?? 0}</strong><span>/ {PVP_MAX_COPIES_PER_EMOJI} IN POOL</span></div>
+              <div className="copy-counter"><strong>{draft.pool[selectedEmojiId] ?? 0}</strong><span>/ {pvpMaxCopiesForEmoji(selectedEmojiId)} IN POOL</span></div>
               <EmojiDetailContent emojiId={selectedEmojiId} />
               <div className="selected-detail-actions">
                 <button

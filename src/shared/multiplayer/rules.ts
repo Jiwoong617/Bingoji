@@ -7,6 +7,7 @@ export type { MultiplayerProfile } from "./types";
 export const PVP_POOL_MIN_SIZE = 10;
 export const PVP_POOL_MAX_SIZE = 15;
 export const PVP_MAX_COPIES_PER_EMOJI = 2;
+export const PVP_MAX_COPIES_PER_EXTRA_PLACEMENT_EMOJI = 1;
 export const PVP_MAX_UNCOMMON = 8;
 export const PVP_MAX_RARE = 4;
 export const PVP_MATCH_START_COUNTDOWN_MS = 3_000;
@@ -24,6 +25,7 @@ export type PvpPoolErrorCode =
   | "pool-too-large"
   | "invalid-copy-count"
   | "too-many-copies"
+  | "too-many-extra-placement-copies"
   | "unknown-emoji"
   | "excluded-emoji"
   | "too-many-uncommon"
@@ -63,6 +65,15 @@ export function poolSize(pool: Pool): number {
   );
 }
 
+export function pvpMaxCopiesForEmoji(emojiId: string): number {
+  const grantsExtraPlacement = EMOJIS[emojiId]?.onPlace?.some(
+    (effect) => effect.type === "extra-placement" || effect.type === "redraw-extra",
+  );
+  return grantsExtraPlacement
+    ? PVP_MAX_COPIES_PER_EXTRA_PLACEMENT_EMOJI
+    : PVP_MAX_COPIES_PER_EMOJI;
+}
+
 export function validatePvpPool(pool: Pool): PvpPoolValidationResult {
   const errors: PvpPoolValidationError[] = [];
   const rarityCounts: Record<Rarity, number> = { common: 0, uncommon: 0, rare: 0 };
@@ -89,11 +100,15 @@ export function validatePvpPool(pool: Pool): PvpPoolValidationResult {
       continue;
     }
     const emoji = EMOJIS[emojiId];
-    if (count > PVP_MAX_COPIES_PER_EMOJI) {
+    const maxCopies = pvpMaxCopiesForEmoji(emojiId);
+    if (count > maxCopies) {
+      const extraPlacementLimited = maxCopies === PVP_MAX_COPIES_PER_EXTRA_PLACEMENT_EMOJI;
       errors.push({
-        code: "too-many-copies",
+        code: extraPlacementLimited ? "too-many-extra-placement-copies" : "too-many-copies",
         emojiId,
-        message: `같은 Emoji는 최대 ${PVP_MAX_COPIES_PER_EMOJI}개까지 넣을 수 있습니다.`,
+        message: extraPlacementLimited
+          ? "추가 배치 Emoji는 종류별 최대 1개까지 넣을 수 있습니다."
+          : `같은 Emoji는 최대 ${PVP_MAX_COPIES_PER_EMOJI}개까지 넣을 수 있습니다.`,
       });
     }
     rarityCounts[emoji.rarity] += count;

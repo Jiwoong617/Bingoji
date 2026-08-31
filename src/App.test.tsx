@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
-import { PVP_EMOJI_IDS } from "./shared";
+import { PVP_EMOJI_IDS, pvpMaxCopiesForEmoji } from "./shared";
 
 function enterSinglePlayer() {
   fireEvent.click(screen.getByRole("button", { name: "게임 시작" }));
@@ -26,7 +26,9 @@ describe("Bingoji app flow", () => {
     enterMultiplayer();
 
     expect(screen.getByRole("heading", { name: "멀티플레이 설정" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /정보 보기, Pool 0\/2$/ })).toHaveLength(PVP_EMOJI_IDS.length);
+    const singleCopyIds = PVP_EMOJI_IDS.filter((emojiId) => pvpMaxCopiesForEmoji(emojiId) === 1);
+    expect(screen.getAllByRole("button", { name: /정보 보기, Pool 0\/2$/ })).toHaveLength(PVP_EMOJI_IDS.length - singleCopyIds.length);
+    expect(screen.getAllByRole("button", { name: /정보 보기, Pool 0\/1$/ })).toHaveLength(singleCopyIds.length);
     const createRoom = screen.getByRole("button", { name: "방 만들기" });
     expect(createRoom).toBeDisabled();
 
@@ -57,6 +59,20 @@ describe("Bingoji app flow", () => {
     expect(screen.getByLabelText(/닉네임/)).toHaveValue("빙고왕");
     expect(screen.getByRole("button", { name: "현재 🐙, 프로필 Emoji 선택" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^쌍검 정보 보기, Pool 2\/2$/ })).toBeInTheDocument();
+  });
+
+  it("limits extra-placement Emoji to one copy in the PvP Pool editor", () => {
+    render(<App />);
+    enterMultiplayer();
+
+    fireEvent.click(screen.getByRole("button", { name: /^한 번 더! 정보 보기, Pool 0\/1$/ }));
+    const detail = screen.getByRole("region", { name: "선택한 Emoji 정보" });
+    const add = within(detail).getByRole("button", { name: "추가" });
+    fireEvent.click(add);
+
+    expect(screen.getByRole("button", { name: /^한 번 더! 정보 보기, Pool 1\/1$/ })).toBeInTheDocument();
+    expect(add).toBeDisabled();
+    expect(add).toHaveAttribute("title", "추가 배치 Emoji는 종류별 최대 1개입니다.");
   });
 
   it("selects catalog Emoji without adding it and edits or clears the Pool from the detail area", () => {

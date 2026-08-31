@@ -3,6 +3,7 @@ import {
   PVP_MAX_RARE,
   PVP_MAX_UNCOMMON,
   isProfileAvatarEmoji,
+  pvpMaxCopiesForEmoji,
   validateMultiplayerProfile,
   validatePvpPool,
 } from "./rules";
@@ -34,6 +35,17 @@ describe("PvP multiplayer rules", () => {
     expect(tooManyRare.errors.map((error) => error.code)).toContain("too-many-rare");
     expect(PVP_MAX_UNCOMMON).toBe(8);
     expect(PVP_MAX_RARE).toBe(4);
+  });
+
+  it("allows only one copy of each Emoji that grants an extra placement", () => {
+    const uncommon = validatePvpPool({ extra_turn: 2, sword: 2, heart: 2, fire: 2, shield: 2 });
+    const rare = validatePvpPool({ cycle: 2, sword: 2, heart: 2, fire: 2, shield: 2 });
+
+    expect(pvpMaxCopiesForEmoji("extra_turn")).toBe(1);
+    expect(pvpMaxCopiesForEmoji("cycle")).toBe(1);
+    expect(pvpMaxCopiesForEmoji("sword")).toBe(2);
+    expect(uncommon.errors.map((error) => error.code)).toContain("too-many-extra-placement-copies");
+    expect(rare.errors.map((error) => error.code)).toContain("too-many-extra-placement-copies");
   });
 
   it("excludes event-only tokens but exposes every battle Emoji", () => {
