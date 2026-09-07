@@ -21,6 +21,22 @@ describe("Bingoji app flow", () => {
     expect(screen.getByRole("button", { name: /멀티플레이/ })).toBeInTheDocument();
   });
 
+  it("opens the global audio settings and adjusts BGM and SFX separately", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "사운드 설정 열기" }));
+    const dialog = screen.getByRole("dialog", { name: "사운드 설정" });
+    const bgm = within(dialog).getByRole("slider", { name: "배경음 볼륨" });
+    const sfx = within(dialog).getByRole("slider", { name: "효과음 볼륨" });
+    fireEvent.change(bgm, { target: { value: "25" } });
+    fireEvent.change(sfx, { target: { value: "40" } });
+
+    expect(bgm).toHaveValue("25");
+    expect(sfx).toHaveValue("40");
+    expect(within(dialog).getByText("25%")).toBeInTheDocument();
+    expect(within(dialog).getByText("40%")).toBeInTheDocument();
+  });
+
   it("builds a valid multiplayer profile from every eligible registry Emoji and keeps the draft in app memory", async () => {
     render(<App />);
     enterMultiplayer();

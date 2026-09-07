@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { EmojiDetailContent } from "../components/EmojiDetailContent";
 import { Modal } from "../components/Modal";
 import { EMOJIS } from "../content/emojis";
+import { emitGameAudio } from "../audio/audioManager";
 import {
   PVP_BINGO_IMPACT_MS,
   PVP_BINGO_PRESENTATION_MS,
@@ -172,6 +173,12 @@ function PvpResultScreen({ result, mine, onInfo, onClose }: { result: PvpMatchRe
   const draw = result.winnerSeat === null;
   const reason = result.reason === "hp" ? "HP 승부" : result.reason === "forfeit" ? "기권" : result.reason === "disconnect" ? "연결 종료" : "Server 종료";
   const elapsedSeconds = Math.floor(result.elapsedMs / 1_000);
+  const resultSoundPlayed = useRef(false);
+  useEffect(() => {
+    if (draw || resultSoundPlayed.current) return;
+    resultSoundPlayed.current = true;
+    emitGameAudio({ type: "result", outcome: won ? "victory" : "defeat" });
+  }, [draw, won]);
   return (
     <main className={`center-screen pvp-result-screen ${won ? "win" : draw ? "draw" : "loss"}`}>
       <section className="pvp-result-card">
@@ -224,6 +231,11 @@ export function MultiplayerBattleScreen({
   const [initiativeVisible, setInitiativeVisible] = useState(() => match.revision === 0 && match.turn === 1);
   const [resolvedBatchKey, setResolvedBatchKey] = useState("");
   const previousHp = useRef({ host: match.players.host.hp, guest: match.players.guest.hp });
+  const previousDrawAudio = useRef<{ turn: number; ids: string[]; activeSeat: PvpSeat | null } | null>(null);
+  const redrawAudioKey = useRef("");
+  const placementAudioKey = useRef("");
+  const bingoAudioKey = useRef("");
+  const impactAudioKey = useRef("");
   const cancelForfeitRef = useRef<HTMLButtonElement>(null);
   const [shownHp, setShownHp] = useState(previousHp.current);
   const batchKey = clientState.events.length > 0 ? `${match.revision}:${clientState.events.map((event) => event.eventId).join(",")}` : "";
@@ -234,6 +246,37 @@ export function MultiplayerBattleScreen({
   }, []);
 
   useEffect(() => setSelectedCell(null), [match.revision, match.activeSeat]);
+
+  useEffect(() => {
+    const previous = previousDrawAudio.current;
+    const currentIds = [...match.privateState.draw];
+    const changed = !previous || previous.ids.join("|") !== currentIds.join("|");
+    const redrawn = clientState.events.some((event) => event.text.includes("새로 Draw"));
+    const currentRedrawKey = redrawn ? `${match.revision}:${clientState.events.map((event) => event.eventId).join("|")}` : "";
+    const newRedraw = Boolean(currentRedrawKey && redrawAudioKey.current !== currentRedrawKey);
+    if (match.activeSeat === mine && currentIds.length > 0 && (
+      !previous
+      || previous.turn !== match.turn
+      || (changed && currentIds.length >= previous.ids.length)
+      || newRedraw
+    )) {
+      emitGameAudio({ type: "draw" });
+    }
+    if (previous && previous.activeSeat === mine && match.activeSeat !== mine && previous.ids.length > 1 && currentIds.length === 0) {
+      emitGameAudio({ type: "discard" });
+    }
+    if (currentRedrawKey) redrawAudioKey.current = currentRedrawKey;
+    previousDrawAudio.current = { turn: match.turn, ids: currentIds, activeSeat: match.activeSeat };
+  }, [clientState.events, match.activeSeat, match.privateState.draw, match.revision, match.turn, mine]);
+
+  useEffect(() => {
+    const placement = match.lastPlacement;
+    if (!placement) return;
+    const key = `${match.revision}:${placement.seat}:${placement.cellIndex}`;
+    if (placementAudioKey.current === key) return;
+    placementAudioKey.current = key;
+    emitGameAudio({ type: "placement" });
+  }, [match.lastPlacement, match.revision]);
 
   useEffect(() => {
     if (!initiativeVisible) return;
@@ -252,9 +295,17 @@ export function MultiplayerBattleScreen({
     setPresenting(true);
     setImpactActive(false);
     const hasBingo = Boolean(match.lastBingo);
+    if (hasBingo && bingoAudioKey.current !== batchKey) {
+      bingoAudioKey.current = batchKey;
+      emitGameAudio({ type: "bingo" });
+    }
     const impactTimer = window.setTimeout(() => {
       setShownHp(nextHp);
       setImpactActive(true);
+      if (impactAudioKey.current !== batchKey) {
+        impactAudioKey.current = batchKey;
+        emitGameAudio({ type: "combat-effects", effects: clientState.events });
+      }
     }, hasBingo ? PVP_BINGO_IMPACT_MS : PVP_STANDARD_IMPACT_MS);
     const finishTimer = window.setTimeout(() => {
       setPresenting(false);
@@ -266,7 +317,7 @@ export function MultiplayerBattleScreen({
       window.clearTimeout(impactTimer);
       window.clearTimeout(finishTimer);
     };
-  }, [batchKey, match.lastBingo, match.players.guest.hp, match.players.host.hp, resolvedBatchKey]);
+  }, [batchKey, clientState.events, match.lastBingo, match.players.guest.hp, match.players.host.hp, resolvedBatchKey]);
 
   const impacts = useMemo(() => ({
     host: clientState.events.filter((event) => event.target === "host" && (event.kind === "damage" || event.kind === "heal")),
@@ -362,6 +413,7 @@ export function MultiplayerBattleScreen({
                 type="button"
                 disabled={presenting || clientState.placementPending}
                 style={{ "--draw-index": drawIndex } as CSSProperties}
+                data-audio-action={selectedCell === null ? "touch" : "placement"}
                 onClick={() => {
                   if (selectedCell === null) onInfo(emojiId);
                   else if (!interactionLocked && onPlace(drawIndex, selectedCell)) setSelectedCell(null);

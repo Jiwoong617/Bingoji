@@ -118,7 +118,7 @@ export function MultiplayerRoomScreen({
           <span className="connection-spinner" aria-hidden="true">⚔️</span>
           <p className="eyebrow">CREATING ROOM</p>
           <h1>{clientState.connection === "error" ? "연결 실패" : "방을 만들고 있습니다"}</h1>
-          <p>{clientState.error?.message ?? "무료 Multiplayer Server와 연결하는 중입니다."}</p>
+          <p>{clientState.error?.message ?? "Multiplayer Server와 연결하는 중입니다."}</p>
           <button className="ghost-button wide" type="button" onClick={onCancel}>취소</button>
         </section>
       </main>

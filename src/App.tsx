@@ -34,6 +34,8 @@ import {
 import { isMultiplayerServerConfigured, MultiplayerRoomClient, type MultiplayerClientState } from "./multiplayer/client";
 import { MultiplayerRoomScreen } from "./multiplayer/RoomScreen";
 import { MultiplayerBattleScreen } from "./multiplayer/BattleScreen";
+import { AudioSettingsButton } from "./audio/AudioSettingsButton";
+import { emitGameAudio } from "./audio/audioManager";
 import { DIFFICULTIES, DIFFICULTY_BY_ID } from "./game/difficulty";
 import {
   advanceEventTimers,
@@ -568,6 +570,37 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
   const [shownHp, setShownHp] = useState({ player: combat.player.hp, enemy: combat.enemy.hp });
   const [enemyIntent, setEnemyIntent] = useState<EnemyIntent | null>(null);
   const preparingEnemyIntent = useRef(false);
+  const previousDrawAudio = useRef<{ turn: number; ids: string[] } | null>(null);
+  const redrawAudioKey = useRef("");
+  const discardAudioKey = useRef("");
+  const bingoAudioKey = useRef("");
+  const impactAudioKey = useRef("");
+  const resultAudioPhase = useRef<CombatState["phase"] | null>(null);
+
+  useEffect(() => {
+    const previous = previousDrawAudio.current;
+    const currentIds = [...combat.draw];
+    const changed = !previous || previous.ids.join("|") !== currentIds.join("|");
+    const redrawn = combat.events.some((event) => event.text.includes("새로 Draw"));
+    const currentRedrawKey = redrawn
+      ? `${combat.turn}:${combat.events.map((event) => event.id).join("|")}`
+      : "";
+    const shouldPlay = combat.phase === "player-selecting"
+      && currentIds.length > 0
+      && (!previous
+        || previous.turn !== combat.turn
+        || (changed && currentIds.length >= previous.ids.length)
+        || (currentRedrawKey && redrawAudioKey.current !== currentRedrawKey));
+    if (shouldPlay) emitGameAudio({ type: "draw" });
+    if (currentRedrawKey) redrawAudioKey.current = currentRedrawKey;
+    previousDrawAudio.current = { turn: combat.turn, ids: currentIds };
+  }, [combat.draw, combat.events, combat.phase, combat.turn]);
+
+  useEffect(() => {
+    const key = combat.discarded.length > 0 ? `${combat.turn}:${combat.discarded.join("|")}` : "";
+    if (key && discardAudioKey.current !== key) emitGameAudio({ type: "discard" });
+    discardAudioKey.current = key;
+  }, [combat.discarded, combat.turn]);
 
   useEffect(() => {
     if (!combat.lastBingo) {
@@ -578,19 +611,38 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
     }
     setPresenting(true);
     setImpactActive(false);
+    const batchKey = `${combat.turn}:${combat.lastBingo.owner}:${combat.lastBingo.lineIds.join("|")}:${combat.events.map((event) => event.id).join("|")}`;
+    if (bingoAudioKey.current !== batchKey) {
+      bingoAudioKey.current = batchKey;
+      emitGameAudio({ type: "bingo" });
+    }
     const impactTimer = window.setTimeout(() => {
       setShownHp({ player: combat.player.hp, enemy: combat.enemy.hp });
       setImpactActive(true);
+      if (impactAudioKey.current !== batchKey) {
+        impactAudioKey.current = batchKey;
+        emitGameAudio({ type: "combat-effects", effects: combat.events });
+      }
     }, BINGO_IMPACT_MS);
     const finishTimer = window.setTimeout(() => {
       setPresenting(false);
       setImpactActive(false);
+      if ((combat.phase === "won" || combat.phase === "lost") && resultAudioPhase.current !== combat.phase) {
+        resultAudioPhase.current = combat.phase;
+        emitGameAudio({ type: "result", outcome: combat.phase === "won" ? "victory" : "defeat" });
+      }
     }, BINGO_PRESENTATION_MS);
     return () => {
       window.clearTimeout(impactTimer);
       window.clearTimeout(finishTimer);
     };
   }, [combat.enemy.hp, combat.events, combat.lastBingo, combat.player.hp]);
+
+  useEffect(() => {
+    if (combat.lastBingo || (combat.phase !== "won" && combat.phase !== "lost") || resultAudioPhase.current === combat.phase) return;
+    resultAudioPhase.current = combat.phase;
+    emitGameAudio({ type: "result", outcome: combat.phase === "won" ? "victory" : "defeat" });
+  }, [combat.lastBingo, combat.phase]);
 
   useEffect(() => {
     if (combat.phase !== "enemy-thinking" || presenting || enemyIntent || preparingEnemyIntent.current) return;
@@ -604,7 +656,9 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
       const intent = enemyIntent;
       setEnemyIntent(null);
       preparingEnemyIntent.current = false;
-      onChange(performEnemyTurn(combat, rng, intent));
+      const nextCombat = performEnemyTurn(combat, rng, intent);
+      emitGameAudio({ type: "placement" });
+      onChange(nextCombat);
     }, 720);
     return () => window.clearTimeout(timer);
   }, [combat, enemyIntent, onChange, presenting, rng]);
@@ -676,9 +730,14 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
                 className={`draw-card ${combat.enemyAbility.glitchDrawIndex === index ? "glitched" : ""}`}
                 type="button"
                 style={{ "--draw-index": index } as CSSProperties}
+                data-audio-action={combat.selectedCell === null ? "touch" : "placement"}
                 onClick={() => {
                   if (combat.selectedCell === null) onInfo(emojiId);
-                  else if (!interactionLocked) onChange(playerPlace(combat, index, rng));
+                  else if (!interactionLocked) {
+                    const nextCombat = playerPlace(combat, index, rng);
+                    if (nextCombat !== combat) emitGameAudio({ type: "placement" });
+                    onChange(nextCombat);
+                  }
                 }}
               >
                 <span>{EMOJIS[emojiId].icon}</span>
@@ -834,8 +893,13 @@ function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { ru
 function RestScreen({ run, healed, onContinue }: { run: RunProgress; healed: number; onContinue: () => void }) {
   const [animating, setAnimating] = useState(true);
   const [shownHp, setShownHp] = useState(() => Math.max(0, run.player.hp - healed));
+  const soundPlayed = useRef(false);
 
   useEffect(() => {
+    if (!soundPlayed.current) {
+      soundPlayed.current = true;
+      emitGameAudio({ type: "rest" });
+    }
     setAnimating(true);
     setShownHp(Math.max(0, run.player.hp - healed));
     const reducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -908,9 +972,12 @@ export default function App() {
   const [multiplayerDraft, setMultiplayerDraft] = useState<MultiplayerProfile>(emptyMultiplayerProfile);
   const [multiplayerAction, setMultiplayerAction] = useState<MultiplayerRoomAction | null>(null);
   const [multiplayerClientState, setMultiplayerClientState] = useState<MultiplayerClientState>(() => multiplayerClient.snapshot());
+  const multiplayerBattleAudio = screen === "multiplayer-room" && Boolean(multiplayerClientState.match) && !multiplayerClientState.result;
+  const audioScene = screen === "battle" || multiplayerBattleAudio ? "battle" : "main";
 
   useEffect(() => multiplayerClient.subscribe(setMultiplayerClientState), [multiplayerClient]);
   useEffect(() => () => multiplayerClient.destroy(), [multiplayerClient]);
+  useEffect(() => emitGameAudio({ type: "scene", scene: audioScene }), [audioScene]);
 
   const runPoolPlayer = useMemo<RunPlayer | null>(() => {
     if (!run) return null;
@@ -1058,7 +1125,10 @@ export default function App() {
     const updatedRun = outcome.run;
     setRun(updatedRun);
     setEventOutcome(outcome.messages.length ? outcome.messages : ["아무 일도 일어나지 않았습니다."]);
-    if (outcome.run.player.hp <= 0) showResult(false, updatedRun);
+    if (outcome.run.player.hp <= 0) {
+      emitGameAudio({ type: "result", outcome: "defeat" });
+      showResult(false, updatedRun);
+    }
   };
 
   const resetToTitle = () => {
@@ -1099,7 +1169,17 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      onClickCapture={(event) => {
+        if (!(event.target instanceof Element)) return;
+        const interactive = event.target.closest("button, input[type='range'], [role='option']");
+        if (!interactive || interactive.matches(":disabled, [aria-disabled='true']")) return;
+        if (interactive.getAttribute("data-audio-action") === "placement") return;
+        emitGameAudio({ type: "touch" });
+      }}
+    >
+      <AudioSettingsButton />
       {screen === "title" && <TitleScreen onStart={() => setScreen("mode")} onHelp={() => setHelpOpen(true)} />}
       {screen === "mode" && <ModeSelectScreen onSingle={() => setScreen("character")} onMultiplayer={() => setScreen("multiplayer-profile")} onCancel={() => setScreen("title")} multiplayerEnabled={isMultiplayerServerConfigured()} />}
       {screen === "character" && <CharacterScreen onStart={chooseCharacter} onCancel={() => setScreen("mode")} onInfo={setInfoEmoji} />}

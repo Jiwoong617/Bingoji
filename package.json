@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev",
+    "generate:audio": "node scripts/generate-audio.mjs",
     "smoke:worker": "node worker/smoke-room.mjs",
     "smoke:worker:timers": "node worker/smoke-room.mjs --timers",
     "build": "tsc -b && vite build",
