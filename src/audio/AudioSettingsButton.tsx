@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
+import { PixelEmoji } from "../components/PixelEmoji";
 import { gameAudio, type AudioSettings } from "./audioManager";
 
 function percent(value: number): number {
@@ -14,7 +15,7 @@ export function AudioSettingsButton() {
 
   return (
     <>
-      <button className="audio-settings-button" type="button" aria-label="사운드 설정 열기" onClick={() => setOpen(true)}>⚙️</button>
+      <button className="audio-settings-button" type="button" aria-label="사운드 설정 열기" onClick={() => setOpen(true)}><PixelEmoji emoji="⚙️" resolution={16} /></button>
       {open && (
         <Modal title="사운드 설정" onClose={() => setOpen(false)} cardClassName="audio-settings-modal">
           <div className="audio-volume-control">

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { PixelEmoji } from "../components/PixelEmoji";
 
 const AvatarEmojiGrid = lazy(() => import("./AvatarEmojiGrid"));
 
@@ -50,7 +51,7 @@ export function AvatarEmojiPicker({
         aria-label={value ? `현재 ${value}, 프로필 Emoji 선택` : "프로필 Emoji 선택"}
         onClick={() => setOpen((current) => !current)}
       >
-        <span>{value || "❔"}</span>
+        <PixelEmoji emoji={value || "❔"} resolution={24} />
         <small>{value ? "변경" : "선택"}</small>
       </button>
 

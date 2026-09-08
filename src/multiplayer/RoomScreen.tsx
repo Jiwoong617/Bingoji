@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PixelEmoji } from "../components/PixelEmoji";
 import { PVP_MATCH_START_COUNTDOWN_MS, isRoomCode, type MultiplayerProfile, type RoomParticipantSnapshot } from "../shared";
 import type { MultiplayerClientState } from "./client";
 import type { MultiplayerRoomAction } from "./ProfileScreen";
@@ -7,7 +8,7 @@ function ParticipantCard({ participant, mine }: { participant: RoomParticipantSn
   if (!participant) {
     return (
       <article className="room-player-card empty" aria-label="빈 참가자 자리">
-        <span className="room-player-avatar">❔</span>
+        <span className="room-player-avatar"><PixelEmoji emoji="❔" resolution={20} /></span>
         <h2>상대 기다리는 중</h2>
         <p>방 코드를 공유해 초대하세요.</p>
       </article>
@@ -16,7 +17,7 @@ function ParticipantCard({ participant, mine }: { participant: RoomParticipantSn
   return (
     <article className={`room-player-card ${mine ? "mine" : "opponent"}`} aria-label={`${mine ? "내" : "상대"} 플레이어 정보`}>
       <span className="room-seat-label">{mine ? "YOU" : participant.seat.toUpperCase()}</span>
-      <span className="room-player-avatar">{participant.avatar}</span>
+      <span className="room-player-avatar"><PixelEmoji emoji={participant.avatar} resolution={22} label={`${participant.nickname} 프로필`} /></span>
       <h2>{participant.nickname}</h2>
       <p>POOL {participant.poolSize}</p>
       <div className="room-player-state">
@@ -81,7 +82,7 @@ export function MultiplayerRoomScreen({
       <main className="center-screen room-entry-screen">
         <section className="room-code-entry">
           <p className="eyebrow">JOIN 1:1 MATCH</p>
-          <span className="entry-profile-avatar">{profile.avatar}</span>
+          <span className="entry-profile-avatar"><PixelEmoji emoji={profile.avatar} resolution={22} label={`${profile.nickname} 프로필`} /></span>
           <h1>방 참가</h1>
           <p>{profile.nickname} · POOL {Object.values(profile.pool).reduce((sum, count) => sum + count, 0)}</p>
           <label htmlFor="room-code">6자리 방 코드</label>
@@ -103,7 +104,7 @@ export function MultiplayerRoomScreen({
         </section>
         {clientState.error && (
           <section className="room-error-popup" role="alertdialog" aria-labelledby="room-error-title">
-            <span>⚠️</span><h2 id="room-error-title">방에 참가할 수 없습니다</h2><p>{clientState.error.message}</p>
+            <span><PixelEmoji emoji="⚠️" resolution={18} /></span><h2 id="room-error-title">방에 참가할 수 없습니다</h2><p>{clientState.error.message}</p>
             <button className="primary-button" type="button" onClick={onClearError}>확인</button>
           </section>
         )}
@@ -115,7 +116,7 @@ export function MultiplayerRoomScreen({
     return (
       <main className="center-screen room-entry-screen">
         <section className="room-code-entry connecting-card">
-          <span className="connection-spinner" aria-hidden="true">⚔️</span>
+          <span className="connection-spinner" aria-hidden="true"><PixelEmoji emoji="⚔️" resolution={20} /></span>
           <p className="eyebrow">CREATING ROOM</p>
           <h1>{clientState.connection === "error" ? "연결 실패" : "방을 만들고 있습니다"}</h1>
           <p>{clientState.error?.message ?? "Multiplayer Server와 연결하는 중입니다."}</p>
@@ -145,13 +146,13 @@ export function MultiplayerRoomScreen({
 
       <section className="room-status-panel" aria-live="polite">
         {room.status === "starting" ? (
-          <><span>⚔️</span><strong>게임이 시작됩니다.</strong><p className="match-start-countdown" aria-label="게임 시작 카운트다운">{countdown}</p></>
+          <><span><PixelEmoji emoji="⚔️" resolution={18} /></span><strong>게임이 시작됩니다.</strong><p className="match-start-countdown" aria-label="게임 시작 카운트다운">{countdown}</p></>
         ) : clientState.match ? (
-          <><span>⚔️</span><strong>대전이 시작되었습니다.</strong><p>다음 전투 화면을 불러오는 중입니다.</p></>
+          <><span><PixelEmoji emoji="⚔️" resolution={18} /></span><strong>대전이 시작되었습니다.</strong><p>다음 전투 화면을 불러오는 중입니다.</p></>
         ) : opponent ? (
-          <><span>{myParticipant?.ready && opponent.ready ? "⚔️" : "✅"}</span><strong>{myParticipant?.ready ? "상대의 준비를 기다리는 중" : "두 플레이어가 준비하면 시작합니다."}</strong><p>상대의 정확한 Pool 구성은 결과 화면에서 공개됩니다.</p></>
+          <><span><PixelEmoji emoji={myParticipant?.ready && opponent.ready ? "⚔️" : "✅"} resolution={18} /></span><strong>{myParticipant?.ready ? "상대의 준비를 기다리는 중" : "두 플레이어가 준비하면 시작합니다."}</strong><p>상대의 정확한 Pool 구성은 결과 화면에서 공개됩니다.</p></>
         ) : (
-          <><span>📨</span><strong>상대를 초대하세요.</strong><p>위 방 코드를 전달하면 상대가 참가할 수 있습니다.</p></>
+          <><span><PixelEmoji emoji="📨" resolution={18} /></span><strong>상대를 초대하세요.</strong><p>위 방 코드를 전달하면 상대가 참가할 수 있습니다.</p></>
         )}
       </section>
 
@@ -163,11 +164,11 @@ export function MultiplayerRoomScreen({
       </div>
 
       {clientState.connection === "reconnecting" && (
-        <div className="reconnect-overlay" role="status"><span>🔄</span><strong>Server에 재접속 중…</strong><p>30초 동안 대전 자리를 유지합니다.</p></div>
+        <div className="reconnect-overlay" role="status"><span><PixelEmoji emoji="🔄" resolution={18} /></span><strong>Server에 재접속 중…</strong><p>30초 동안 대전 자리를 유지합니다.</p></div>
       )}
       {clientState.error && clientState.connection !== "reconnecting" && (
         <section className="room-error-popup" role="alertdialog" aria-labelledby="room-error-title">
-          <span>⚠️</span><h2 id="room-error-title">연결 안내</h2><p>{clientState.error.message}</p>
+          <span><PixelEmoji emoji="⚠️" resolution={18} /></span><h2 id="room-error-title">연결 안내</h2><p>{clientState.error.message}</p>
           <button className="primary-button" type="button" onClick={onClearError}>확인</button>
         </section>
       )}

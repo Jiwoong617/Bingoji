@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { EmojiDetailContent } from "./components/EmojiDetailContent";
 import { Modal } from "./components/Modal";
+import { PixelEmoji, PixelEmojiText } from "./components/PixelEmoji";
 import { CHARACTERS, EMOJIS, MAP_META, validateContent } from "./content/data";
 import {
   createCombat,
@@ -139,14 +140,14 @@ function PoolView({ player, onClose }: { player: RunPlayer; onClose: () => void 
       <div className="pool-grid pool-inventory" aria-label="보유 Emoji 목록">
         {entries.map(([id, count]) => (
           <button key={id} className={`pool-item ${selectedId === id ? "selected" : ""}`} type="button" aria-pressed={selectedId === id} onClick={() => setSelectedId(id)}>
-            <span>{EMOJIS[id].icon}</span><strong>×{count}</strong><small>{EMOJIS[id].name}</small>
+            <PixelEmoji emoji={EMOJIS[id].icon} /><strong>×{count}</strong><small>{EMOJIS[id].name}</small>
           </button>
         ))}
       </div>
       <section className={`pool-inline-detail ${selectedId ? "has-selection" : ""}`} aria-live="polite">
         {selectedId
           ? <EmojiDetailContent emojiId={selectedId} />
-          : <div className="pool-detail-empty"><span>👆</span><strong>Emoji를 선택하세요</strong><p>위 Pool에서 Emoji를 누르면 능력과 관련 상태 효과가 여기에 표시됩니다.</p></div>}
+          : <div className="pool-detail-empty"><PixelEmoji emoji="👆" /><strong>Emoji를 선택하세요</strong><p>위 Pool에서 Emoji를 누르면 능력과 관련 상태 효과가 여기에 표시됩니다.</p></div>}
       </section>
     </Modal>
   );
@@ -175,7 +176,7 @@ function OwnedPoolStrip({
             onClick={() => onInfo(id)}
             aria-label={`${EMOJIS[id].name} ${count}개, 정보 보기`}
           >
-            <span>{EMOJIS[id].icon}</span><small>×{count}</small>
+            <PixelEmoji emoji={EMOJIS[id].icon} /><small>×{count}</small>
           </button>
         ))}
       </div>
@@ -202,7 +203,7 @@ function TitleScreen({ onStart, onHelp }: { onStart: () => void; onHelp: () => v
   return (
     <main className="center-screen title-screen">
       <div className="floating-emojis" aria-hidden="true">
-        <span>🔥</span><span>⚔️</span><span>❤️</span><span>💀</span><span>🍀</span>
+        <PixelEmoji emoji="🔥" resolution={20} /><PixelEmoji emoji="⚔️" resolution={20} /><PixelEmoji emoji="❤️" resolution={20} /><PixelEmoji emoji="💀" resolution={20} /><PixelEmoji emoji="🍀" resolution={20} />
       </div>
       <div className="title-mark">
         <p className="eyebrow">EMOJI BINGO ROGUELIKE</p>
@@ -227,10 +228,10 @@ function ModeSelectScreen({ onSingle, onMultiplayer, onCancel, multiplayerEnable
       </header>
       <section className="mode-options" aria-label="게임 모드 목록">
         <button className="mode-card single" type="button" onClick={onSingle}>
-          <span>🗺️</span><h2>싱글플레이</h2><p>Stage를 돌파하는 기존 PvE Run</p>
+          <PixelEmoji emoji="🗺️" resolution={24} /><h2>싱글플레이</h2><p>Stage를 돌파하는 기존 PvE Run</p>
         </button>
         <button className="mode-card multiplayer" type="button" onClick={onMultiplayer} disabled={!multiplayerEnabled}>
-          <span>⚔️</span><h2>멀티플레이</h2><p>{multiplayerEnabled ? "방 코드로 만나는 실시간 1:1 대전" : "멀티플레이 Server가 아직 설정되지 않았습니다."}</p>
+          <PixelEmoji emoji="⚔️" resolution={24} /><h2>멀티플레이</h2><p>{multiplayerEnabled ? "방 코드로 만나는 실시간 1:1 대전" : "멀티플레이 Server가 아직 설정되지 않았습니다."}</p>
         </button>
       </section>
       <button className="ghost-button" type="button" onClick={onCancel}>← 메인 화면</button>
@@ -335,7 +336,7 @@ function CharacterScreen({ onStart, onCancel, onInfo }: { onStart: (id: string) 
                   else if (event.key === "ArrowRight") moveSelection(1);
                 }}
               >
-                <span className="side-character-icon">{item.icon}</span>
+                <PixelEmoji className="side-character-icon" emoji={item.icon} resolution={24} />
                 <strong className="side-character-name">{item.name}</strong>
                 <small>HP {item.maxHp}</small>
               </article>
@@ -344,14 +345,14 @@ function CharacterScreen({ onStart, onCancel, onInfo }: { onStart: (id: string) 
         </div>
       </section>
       <section className="character-card selected-card" aria-label={`${character.name} 상세 정보`}>
-        <div className="character-spotlight"><span>{character.icon}</span></div>
+        <div className="character-spotlight"><PixelEmoji emoji={character.icon} resolution={24} /></div>
         <p className="selected-label">SELECTED</p>
         <h2>{character.name}</h2>
         <HpBar hp={character.maxHp} maxHp={character.maxHp} tone="player" />
         <div className="ability-box"><strong>{character.abilityId === "none" ? "TRAIT" : "ABILITY"}</strong><h3>{ability.name}</h3><p>{ability.description}</p></div>
         <div className="starting-pool">
           <strong>STARTING POOL</strong>
-          <div>{Object.entries(character.startingPool).map(([id, count]) => <button key={id} type="button" onClick={() => onInfo(id)} aria-label={`${EMOJIS[id].name} 정보 보기`}>{EMOJIS[id].icon}<small>×{count}</small></button>)}</div>
+          <div>{Object.entries(character.startingPool).map(([id, count]) => <button key={id} type="button" onClick={() => onInfo(id)} aria-label={`${EMOJIS[id].name} 정보 보기`}><PixelEmoji emoji={EMOJIS[id].icon} /><small>×{count}</small></button>)}</div>
         </div>
       </section>
       <div className="two-actions">
@@ -369,12 +370,12 @@ function DifficultyScreen({ characterId, onStart, onCancel }: { characterId: str
       <header className="screen-heading">
         <p className="eyebrow">CHOOSE DIFFICULTY</p>
         <h1>난이도 선택</h1>
-        <p><span className="difficulty-character-icon">{character.icon}</span> {character.name}의 Run 난이도를 정하세요.</p>
+        <p><PixelEmoji className="difficulty-character-icon" emoji={character.icon} resolution={20} /> {character.name}의 Run 난이도를 정하세요.</p>
       </header>
       <section className="difficulty-options" aria-label="게임 난이도 목록">
         {DIFFICULTIES.map((difficulty) => (
           <button key={difficulty.id} className={`difficulty-card difficulty-${difficulty.id}`} type="button" onClick={() => onStart(difficulty.id)} aria-label={`${difficulty.label} 난이도로 시작`}>
-            <span className="difficulty-icon">{difficulty.icon}</span>
+            <PixelEmoji className="difficulty-icon" emoji={difficulty.icon} resolution={22} />
             <h2>{difficulty.label}</h2>
           </button>
         ))}
@@ -395,10 +396,10 @@ function MapScreen({ run, candidates, onSelect, onInfo, onClaimEventReward }: { 
       </header>
       {run.pendingEventReward && (
         <section className="pending-event-reward">
-          <span>{run.pendingEventReward.icon}</span>
+          <PixelEmoji emoji={run.pendingEventReward.icon} resolution={22} />
           <div><p className="eyebrow">DELAYED EVENT REWARD</p><h2>{run.pendingEventReward.name}</h2><p>보상 Emoji 하나를 선택하세요.</p></div>
           <div className="pending-reward-options">
-            {run.pendingEventReward.options.map((emojiId) => <button key={emojiId} type="button" onClick={() => onClaimEventReward(emojiId)}><span>{EMOJIS[emojiId].icon}</span><strong>{EMOJIS[emojiId].name}</strong><small>{EMOJIS[emojiId].description}</small></button>)}
+            {run.pendingEventReward.options.map((emojiId) => <button key={emojiId} type="button" onClick={() => onClaimEventReward(emojiId)}><PixelEmoji emoji={EMOJIS[emojiId].icon} /><strong>{EMOJIS[emojiId].name}</strong><small>{EMOJIS[emojiId].description}</small></button>)}
           </div>
         </section>
       )}
@@ -406,24 +407,24 @@ function MapScreen({ run, candidates, onSelect, onInfo, onClaimEventReward }: { 
         {candidates.map((map, index) => (
           <button key={map.id} className={`map-card map-${map.type}`} type="button" onClick={() => onSelect(map)}>
             <span className="map-side">{candidates.length === 1 ? "DESTINATION" : index === 0 ? "LEFT" : "RIGHT"}</span>
-            <span className="map-icon">{map.icon}</span>
+            <PixelEmoji className="map-icon" emoji={map.icon} resolution={24} />
             <strong>{map.label}</strong>
             <small>{map.type === "question" ? "무슨 일이 일어날지 알 수 없습니다" : map.type === "rest" ? "최대 HP의 30% 회복" : map.type === "boss" ? "Stage의 마지막 전투" : "승리하면 Pool을 강화할 수 있습니다"}</small>
           </button>
         ))}
       </section>}
       <section className="run-status">
-        <div><span>{run.player.icon}</span><strong>{run.player.name}</strong></div>
+        <div><PixelEmoji emoji={run.player.icon} resolution={20} /><strong>{run.player.name}</strong></div>
         <HpBar hp={run.player.hp} maxHp={run.player.maxHp} tone="player" />
         <span className="pool-count">{DIFFICULTY_BY_ID[run.difficulty].label} · POOL {Object.values(run.player.pool).reduce((a, b) => a + b, 0)}</span>
       </section>
       {(run.notices.length > 0 || run.modifiers.length > 0 || run.scheduledRewards.length > 0) && (
         <section className="run-effects" aria-label="진행 중인 이벤트 효과">
-          {run.notices.map((notice, index) => <p key={`${notice}-${index}`}>✨ {notice}</p>)}
+          {run.notices.map((notice, index) => <p key={`${notice}-${index}`}><PixelEmoji emoji="✨" /> <PixelEmojiText text={notice} /></p>)}
           {run.modifiers.map((modifier, index) => (
-            <p key={`${modifier.id}-${index}`}>{modifier.icon} <strong>{modifier.name}</strong> · {modifier.description}{modifier.remainingBattles ? ` (${modifier.remainingBattles}전투)` : modifier.remainingMaps ? ` (${modifier.remainingMaps} Map)` : ""}</p>
+            <p key={`${modifier.id}-${index}`}><PixelEmoji emoji={modifier.icon} /> <strong>{modifier.name}</strong> · <PixelEmojiText text={modifier.description} />{modifier.remainingBattles ? ` (${modifier.remainingBattles}전투)` : modifier.remainingMaps ? ` (${modifier.remainingMaps} Map)` : ""}</p>
           ))}
-          {run.scheduledRewards.map((reward) => <p key={reward.id}>{reward.icon} <strong>{reward.name}</strong>까지 {reward.mapsRemaining} {reward.counter === "battle" ? "전투" : "Map"}</p>)}
+          {run.scheduledRewards.map((reward) => <p key={reward.id}><PixelEmoji emoji={reward.icon} /> <strong>{reward.name}</strong>까지 {reward.mapsRemaining} {reward.counter === "battle" ? "전투" : "Map"}</p>)}
         </section>
       )}
       <OwnedPoolStrip pool={run.player.pool} onInfo={onInfo} />
@@ -473,12 +474,12 @@ function FighterPanel({
 
   return (
     <section className={`fighter-panel ${tone} ${impactActive && hasDamage ? "taking-hit" : ""} ${impactActive && hasHeal ? "receiving-heal" : ""}`}>
-      <span className="fighter-icon">{combatant.icon}</span>
+      <PixelEmoji className="fighter-icon" emoji={combatant.icon} resolution={22} />
       <div className="fighter-copy">
         <div className="fighter-name">
           <span>{tone === "enemy" ? "ENEMY" : "PLAYER"}</span>
           <strong>{combatant.name}</strong>
-          {onPool && <button className="fighter-pool-button" type="button" onClick={onPool}>🎒 POOL</button>}
+          {onPool && <button className="fighter-pool-button" type="button" onClick={onPool}><PixelEmoji emoji="🎒" /> POOL</button>}
         </div>
         <div className="fighter-hp-line">
           <HpBar hp={shownHp} maxHp={combatant.maxHp} tone={tone} />
@@ -500,7 +501,7 @@ function FighterPanel({
               aria-expanded={activeStatus === status.key}
               onClick={() => setActiveStatus(status.key)}
             >
-              <span>{status.icon}</span><strong>{status.value}</strong>{status.duration !== undefined && <small>{status.duration}T</small>}
+              <PixelEmoji emoji={status.icon} resolution={14} /><strong>{status.value}</strong>{status.duration !== undefined && <small>{status.duration}T</small>}
               <span className="status-tooltip" role="tooltip"><b>{status.name}</b><em>{status.description}</em></span>
             </button>
           ))}
@@ -513,7 +514,7 @@ function FighterPanel({
 
 function BingoEffects({ combat, presenting }: { combat: CombatState; presenting: boolean }) {
   if (!combat.lastBingo && combat.events.length === 0) {
-    return <section className="effect-zone empty"><span>✨</span><p>완성된 Bingo 효과가 여기에 표시됩니다.</p></section>;
+    return <section className="effect-zone empty"><PixelEmoji emoji="✨" /><p>완성된 Bingo 효과가 여기에 표시됩니다.</p></section>;
   }
   return (
     <section className={`effect-zone ${combat.lastBingo?.owner ?? ""} ${presenting ? "presenting" : ""}`}>
@@ -525,11 +526,13 @@ function BingoEffects({ combat, presenting }: { combat: CombatState; presenting:
             {combat.lastBingo.icons.map((icons, lineIndex) => (
               <p key={combat.lastBingo!.lineIds[lineIndex]}>
                 {icons.map((icon, iconIndex) => (
-                  <span
+                  <PixelEmoji
                     key={`${lineIndex}-${iconIndex}`}
                     className="bingo-icon-token"
+                    emoji={icon}
+                    resolution={18}
                     style={{ "--icon-index": iconIndex, "--line-index": lineIndex } as CSSProperties}
-                  >{icon}</span>
+                  />
                 ))}
               </p>
             ))}
@@ -537,7 +540,7 @@ function BingoEffects({ combat, presenting }: { combat: CombatState; presenting:
         </div>
       )}
       <div className="effect-log" aria-live="polite">
-        {combat.events.slice(-6).map((item) => <span key={item.id}>{item.text}</span>)}
+        {combat.events.slice(-6).map((item) => <span key={item.id}><PixelEmojiText text={item.text} /></span>)}
       </div>
       {presenting && (
         <div className="effect-projectiles" aria-hidden="true">
@@ -546,7 +549,7 @@ function BingoEffects({ combat, presenting }: { combat: CombatState; presenting:
               key={`projectile-${item.id}`}
               className={`effect-projectile ${item.kind} target-${item.target}`}
               style={{ "--effect-index": index } as CSSProperties}
-            >{item.kind === "damage" ? "💥" : "💚"}<b>{item.value}</b></span>
+            ><PixelEmoji emoji={item.kind === "damage" ? "💥" : "💚"} /><b>{item.value}</b></span>
           ))}
         </div>
       )}
@@ -713,16 +716,16 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
                   else if (!interactionLocked) onChange(selectCombatCell(combat, index));
                 }}
               >
-                {cell ? <><span>{EMOJIS[cell.emojiId].icon}</span><i aria-hidden="true" />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingoIcon !== undefined ? <span className="bingo-afterimage">{bingoIcon}</span> : <span className="cell-plus">{enemyIntent?.cellIndex === index ? "◎" : "+"}</span>}
+                {cell ? <><PixelEmoji emoji={EMOJIS[cell.emojiId].icon} resolution={20} /><i aria-hidden="true" />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingoIcon !== undefined ? <PixelEmoji className="bingo-afterimage" emoji={bingoIcon} resolution={20} /> : <span className="cell-plus">{enemyIntent?.cellIndex === index ? "◎" : "+"}</span>}
               </button>
             );
           })}
         </div>
       </section>
       <section className="draw-section" onClick={(event) => event.stopPropagation()}>
-        <div className="draw-heading"><span>THIS TURN</span><strong>DRAW EMOJI</strong>{combat.combatRules.openingRedrawAvailable && <button type="button" onClick={() => onChange(rerollOpeningDraw(combat, rng))}>🪩 첫 Draw 다시 뽑기</button>}</div>
+        <div className="draw-heading"><span>THIS TURN</span><strong>DRAW EMOJI</strong>{combat.combatRules.openingRedrawAvailable && <button type="button" onClick={() => onChange(rerollOpeningDraw(combat, rng))}><PixelEmoji emoji="🪩" /> 첫 Draw 다시 뽑기</button>}</div>
         <div className="draw-row">
-          <button className="pool-button draw-pool-button" type="button" onClick={onPool}><span>🎒</span><small>MY POOL</small></button>
+          <button className="pool-button draw-pool-button" type="button" onClick={onPool}><PixelEmoji emoji="🎒" /><small>MY POOL</small></button>
           <div className="draw-cards">
             {combat.draw.map((emojiId, index) => (
               <button
@@ -740,7 +743,7 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
                   }
                 }}
               >
-                <span>{EMOJIS[emojiId].icon}</span>
+                <PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={20} />
                 <strong>{EMOJIS[emojiId].name}</strong>
                 <small>{combat.enemyAbility.glitchDrawIndex === index ? "GLITCH · 배치 시 변신" : combat.selectedCell === null ? "정보 보기" : "여기에 배치"}</small>
               </button>
@@ -748,15 +751,15 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
             {combat.phase === "enemy-thinking" && <div className="enemy-thinking-card">상대의 수…</div>}
           </div>
           <div className={`trash ${combat.discarded.length ? "active" : ""}`} aria-label="사용하지 않은 Emoji">
-            <div className="discarded-flight">{combat.discarded.map((id, index) => <span key={`${id}-${index}`} style={{ "--discard-index": index } as CSSProperties}>{EMOJIS[id].icon}</span>)}</div>
-            <span>🗑️</span>
-            <small>{combat.discarded.map((id) => EMOJIS[id].icon).join(" ") || "DISCARD"}</small>
+            <div className="discarded-flight">{combat.discarded.map((id, index) => <PixelEmoji key={`${id}-${index}`} emoji={EMOJIS[id].icon} style={{ "--discard-index": index } as CSSProperties} />)}</div>
+            <PixelEmoji emoji="🗑️" resolution={20} />
+            <small>{combat.discarded.length ? combat.discarded.map((id, index) => <PixelEmoji key={`${id}-${index}`} emoji={EMOJIS[id].icon} resolution={12} />) : "DISCARD"}</small>
           </div>
         </div>
       </section>
       {(combat.phase === "won" || combat.phase === "lost") && !presenting && (
         <div className={`battle-result-overlay ${combat.phase}`}>
-          <span>{combat.phase === "won" ? "🏆" : "💔"}</span>
+          <PixelEmoji emoji={combat.phase === "won" ? "🏆" : "💔"} resolution={24} />
           <h2>{combat.phase === "won" ? "BATTLE CLEAR" : "RUN OVER"}</h2>
           <p>{combat.phase === "won" ? "마지막 한 칸을 지배했습니다." : "HP가 모두 소진되었습니다."}</p>
           <button className="primary-button" type="button" onClick={onFinish}>{combat.phase === "won" ? "보상 확인" : "결과 보기"}</button>
@@ -790,7 +793,7 @@ function RewardScreen({ run, options, onChoose, onInfo }: { run: RunProgress; op
               <article key={option.label} className="reward-card">
                 <span className={`reward-label rarity-${emoji.rarity}`}>{option.label} · {emoji.rarity === "common" ? "일반" : emoji.rarity === "uncommon" ? "고급" : "희귀"}</span>
                 <button className="reward-info" type="button" onClick={() => onInfo(option.emojiId)}>
-                  <span>{emoji.icon}</span><h2>{emoji.name}</h2><p>{emoji.description}</p>
+                  <PixelEmoji emoji={emoji.icon} resolution={22} /><h2>{emoji.name}</h2><p>{emoji.description}</p>
                 </button>
                 <button className="primary-button" type="button" onClick={() => onChoose(addEmoji(run.player, option.emojiId))}>Pool에 추가</button>
               </article>
@@ -798,7 +801,7 @@ function RewardScreen({ run, options, onChoose, onInfo }: { run: RunProgress; op
           })}
           <article className="reward-card remove-card">
             <span className="reward-label">POOL CLEANUP</span>
-            <div className="reward-info"><span>🗑️</span><h2>Emoji 제거</h2><p>{hasRemovableEmoji ? "현재 Pool에서 Emoji 한 개를 영구 제거합니다." : "Pool에는 최소 3개의 Emoji가 필요합니다."}</p></div>
+            <div className="reward-info"><PixelEmoji emoji="🗑️" resolution={22} /><h2>Emoji 제거</h2><p>{hasRemovableEmoji ? "현재 Pool에서 Emoji 한 개를 영구 제거합니다." : "Pool에는 최소 3개의 Emoji가 필요합니다."}</p></div>
             <button className="danger-button" type="button" disabled={!hasRemovableEmoji} onClick={() => setRemoving(true)}>{hasRemovableEmoji ? "제거할 Emoji 선택" : "제거할 수 없음"}</button>
           </article>
         </section>
@@ -809,7 +812,7 @@ function RewardScreen({ run, options, onChoose, onInfo }: { run: RunProgress; op
           <div className="pool-grid large">
             {Object.entries(run.player.pool).map(([id, count]) => (
               <button key={id} className="pool-item" type="button" disabled={!canRemoveEmoji(run.player, id)} onClick={() => onChoose(removeEmoji(run.player, id))}>
-                <span>{EMOJIS[id].icon}</span><strong>×{count}</strong><small>{EMOJIS[id].name}</small>
+                <PixelEmoji emoji={EMOJIS[id].icon} /><strong>×{count}</strong><small>{EMOJIS[id].name}</small>
               </button>
             ))}
           </div>
@@ -846,14 +849,14 @@ function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { ru
     <main className="center-screen event-screen">
       <section className="story-card">
         <p className="eyebrow">MYSTERY EVENT</p>
-        <span className="story-icon">{event.icon}</span>
+        <PixelEmoji className="story-icon" emoji={event.icon} resolution={24} />
         <h1>{event.title}</h1>
-        <p className="story-copy">{event.content}</p>
+        <p className="story-copy"><PixelEmojiText text={event.content} /></p>
         {outcome.length === 0 && pendingChoice === null ? (
           <div className="event-choices">
             {event.choices.map((eventChoice, index) => (
               <button key={eventChoice.id} type="button" disabled={!canChooseEventChoice(run, eventChoice)} onClick={() => choose(index)}>
-                <strong>{eventChoice.label}</strong><span>{eventChoice.hint}</span>
+                <strong><PixelEmojiText text={eventChoice.label} /></strong><span><PixelEmojiText text={eventChoice.hint} /></span>
                 {!canChooseEventChoice(run, eventChoice) && <small>조건에 맞는 Emoji가 부족합니다.</small>}
               </button>
             ))}
@@ -870,7 +873,7 @@ function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { ru
                 const selected = selectedIds.includes(id);
                 return (
                   <button key={id} className={`pool-item ${selected ? "selected" : ""}`} type="button" aria-pressed={selected} onClick={() => toggleEmoji(id)}>
-                    <span>{emoji.icon}</span><strong>×{run.player.pool[id]}</strong><small>{emoji.name}</small>
+                    <PixelEmoji emoji={emoji.icon} /><strong>×{run.player.pool[id]}</strong><small>{emoji.name}</small>
                     <small>{emoji.rarity === "common" ? "일반" : emoji.rarity === "uncommon" ? "고급" : "희귀"} · {emoji.tags.slice(0, 2).join(", ") || "태그 없음"}</small>
                   </button>
                 );
@@ -880,7 +883,7 @@ function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { ru
           </div>
         ) : (
           <div className="event-outcome">
-            {outcome.map((message) => <p key={message}>{message}</p>)}
+            {outcome.map((message) => <p key={message}><PixelEmojiText text={message} /></p>)}
             <button className="primary-button wide" type="button" onClick={onContinue}>계속하기</button>
           </div>
         )}
@@ -915,7 +918,7 @@ function RestScreen({ run, healed, onContinue }: { run: RunProgress; healed: num
     <main className={`center-screen rest-screen ${animating ? "rest-animating" : ""}`}>
       <section className="story-card">
         <p className="eyebrow">REST AREA</p>
-        <span className="story-icon campfire">🔥</span>
+        <PixelEmoji className="story-icon campfire" emoji="🔥" resolution={24} />
         <h1>잠시 쉬어갑니다</h1>
         <p className="story-copy">따뜻한 모닥불 앞에서 다음 Bingo를 준비했습니다.</p>
         <div className="rest-result"><strong>HP +{healed}</strong><HpBar hp={shownHp} maxHp={run.player.maxHp} tone="player" /></div>
@@ -932,7 +935,7 @@ function ResultScreen({ result, onRestart, onInfo }: { result: ResultState; onRe
   return (
     <main className={`center-screen result-screen ${result.cleared ? "clear" : "fail"}`}>
       <section className="result-card">
-        <span className="result-icon">{result.cleared ? "🏆" : "💔"}</span>
+        <PixelEmoji className="result-icon" emoji={result.cleared ? "🏆" : "💔"} resolution={24} />
         <p className="eyebrow">RUN RESULT</p>
         <h1>{result.cleared ? "BINGOJI CLEAR!" : "GAME OVER"}</h1>
         <p>{result.cleared ? "Stage 3의 Boss를 쓰러뜨렸습니다!" : `Stage ${result.stage} · Map ${result.map}에서 쓰러졌습니다.`}</p>
@@ -942,7 +945,7 @@ function ResultScreen({ result, onRestart, onInfo }: { result: ResultState; onRe
           <div><small>POOL SIZE</small><strong>{Object.values(result.pool).reduce((a, b) => a + b, 0)}</strong></div>
         </div>
         <div className="final-pool">
-          {Object.entries(result.pool).map(([id, count]) => <button key={id} type="button" onClick={() => onInfo(id)} aria-label={`${EMOJIS[id].name} 정보 보기`}>{EMOJIS[id].icon}<small>×{count}</small></button>)}
+          {Object.entries(result.pool).map(([id, count]) => <button key={id} type="button" onClick={() => onInfo(id)} aria-label={`${EMOJIS[id].name} 정보 보기`}><PixelEmoji emoji={EMOJIS[id].icon} /><small>×{count}</small></button>)}
         </div>
         <button className="primary-button wide" type="button" onClick={onRestart}>새 Run 시작</button>
       </section>

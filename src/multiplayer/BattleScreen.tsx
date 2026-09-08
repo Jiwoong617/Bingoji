@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { EmojiDetailContent } from "../components/EmojiDetailContent";
 import { Modal } from "../components/Modal";
+import { PixelEmoji, PixelEmojiText } from "../components/PixelEmoji";
 import { EMOJIS } from "../content/emojis";
 import { emitGameAudio } from "../audio/audioManager";
 import {
@@ -63,7 +64,7 @@ function PvpFighterPanel({
 
   return (
     <section className={`fighter-panel ${mine ? "player" : "enemy"} ${impactActive && hasDamage ? "taking-hit" : ""} ${impactActive && hasHeal ? "receiving-heal" : ""}`}>
-      <span className="fighter-icon">{player.avatar}</span>
+      <span className="fighter-icon"><PixelEmoji emoji={player.avatar} resolution={22} label={`${player.nickname} 프로필`} /></span>
       <div className="fighter-copy">
         <div className="fighter-name"><span>{mine ? "YOU" : "OPPONENT"}</span><strong>{player.nickname}</strong></div>
         <div className="fighter-hp-line">
@@ -84,7 +85,7 @@ function PvpFighterPanel({
               aria-expanded={activeStatus === status.statusId}
               onClick={(event) => { event.stopPropagation(); setActiveStatus((current) => current === status.statusId ? null : status.statusId); }}
             >
-              <span>{status.icon}</span><strong>{status.value}</strong>{status.duration !== undefined && <small>{status.duration}T</small>}
+              <span><PixelEmoji emoji={status.icon} resolution={14} /></span><strong>{status.value}</strong>{status.duration !== undefined && <small>{status.duration}T</small>}
               <span className="status-tooltip" role="tooltip"><b>{status.name}</b><em>{status.description}</em></span>
             </button>
           ))}
@@ -109,7 +110,7 @@ function PvpPoolModal({ pool, onClose }: { pool: Pool; onClose: () => void }) {
         <div className="pool-grid pool-inventory">
           {Object.entries(pool).map(([emojiId, count]) => (
             <button key={emojiId} className={`pool-item ${selectedId === emojiId ? "selected" : ""}`} type="button" aria-pressed={selectedId === emojiId} onClick={() => setSelectedId(emojiId)}>
-              <span>{EMOJIS[emojiId].icon}</span><strong>×{count}</strong><small>{EMOJIS[emojiId].name}</small>
+              <span><PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={18} /></span><strong>×{count}</strong><small>{EMOJIS[emojiId].name}</small>
             </button>
           ))}
         </div>
@@ -131,7 +132,7 @@ function PvpEffectZone({
   presenting: boolean;
 }) {
   if (!match.lastBingo && events.length === 0) {
-    return <section className="effect-zone empty"><span>✨</span><p>완성된 Bingo 효과가 여기에 표시됩니다.</p></section>;
+    return <section className="effect-zone empty"><span><PixelEmoji emoji="✨" resolution={16} /></span><p>완성된 Bingo 효과가 여기에 표시됩니다.</p></section>;
   }
   const ownerTone = match.lastBingo?.owner === mine ? "player" : "enemy";
   return (
@@ -144,19 +145,19 @@ function PvpEffectZone({
             {match.lastBingo.lineIds.map((lineId, lineIndex) => (
               <p key={lineId}>
                 {events.filter((event) => event.lineId === lineId).slice(0, 5).map((event, iconIndex) => (
-                  <span key={`${event.eventId}-${iconIndex}`} className="bingo-icon-token" style={{ "--icon-index": iconIndex, "--line-index": lineIndex } as CSSProperties}>{event.icon}</span>
+                  <span key={`${event.eventId}-${iconIndex}`} className="bingo-icon-token" style={{ "--icon-index": iconIndex, "--line-index": lineIndex } as CSSProperties}><PixelEmoji emoji={event.icon} resolution={18} /></span>
                 ))}
               </p>
             ))}
           </div>
         </div>
       )}
-      <div className="effect-log" aria-live="polite">{events.slice(-6).map((event) => <span key={event.eventId}>{event.text}</span>)}</div>
+      <div className="effect-log" aria-live="polite">{events.slice(-6).map((event) => <span key={event.eventId}><PixelEmojiText text={event.text} resolution={14} /></span>)}</div>
       {presenting && (
         <div className="effect-projectiles" aria-hidden="true">
           {events.filter((event) => event.kind === "damage" || event.kind === "heal").map((event, index) => (
             <span key={event.eventId} className={`effect-projectile ${event.kind} target-${event.target === mine ? "player" : "enemy"}`} style={{ "--effect-index": index } as CSSProperties}>
-              {event.kind === "damage" ? "💥" : "💚"}<b>{event.value}</b>
+              <PixelEmoji emoji={event.kind === "damage" ? "💥" : "💚"} resolution={16} /><b>{event.value}</b>
             </span>
           ))}
         </div>
@@ -183,17 +184,17 @@ function PvpResultScreen({ result, mine, onInfo, onClose }: { result: PvpMatchRe
     <main className={`center-screen pvp-result-screen ${won ? "win" : draw ? "draw" : "loss"}`}>
       <section className="pvp-result-card">
         <p className="eyebrow">PVP MATCH RESULT</p>
-        <span className="result-icon">{won ? "🏆" : draw ? "🤝" : "💔"}</span>
+        <span className="result-icon"><PixelEmoji emoji={won ? "🏆" : draw ? "🤝" : "💔"} resolution={24} /></span>
         <h1>{won ? "VICTORY" : draw ? "DRAW" : "DEFEAT"}</h1>
         <p>{reason} · TURN {result.turns} · {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, "0")}</p>
         <section className="pvp-result-players">
           {[{ player: me, label: "YOU" }, { player: opponent, label: "OPPONENT" }].map(({ player, label }) => (
             <article key={player.seat}>
-              <small>{label}</small><span>{player.avatar}</span><h2>{player.nickname}</h2><strong>HP {player.hp} / {player.maxHp}</strong>
+              <small>{label}</small><span><PixelEmoji emoji={player.avatar} resolution={22} label={`${player.nickname} 프로필`} /></span><h2>{player.nickname}</h2><strong>HP {player.hp} / {player.maxHp}</strong>
               <div className="pvp-result-pool">
                 {Object.entries(player.pool).map(([emojiId, count]) => (
                   <button key={emojiId} type="button" onClick={() => onInfo(emojiId)} aria-label={`${player.nickname}의 ${EMOJIS[emojiId].name} 정보 보기`}>
-                    <span>{EMOJIS[emojiId].icon}</span><small>×{count}</small>
+                    <span><PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={16} /></span><small>×{count}</small>
                   </button>
                 ))}
               </div>
@@ -394,7 +395,7 @@ export function MultiplayerBattleScreen({
                   else if (!interactionLocked) setSelectedCell((current) => current === index ? null : index);
                 }}
               >
-                {cell ? <><span>{EMOJIS[cell.emojiId].icon}</span><i />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingo && bingoAfterimages.has(index) ? <span className="bingo-afterimage">{bingoAfterimages.get(index)}</span> : <span className="cell-plus">+</span>}
+                {cell ? <><span><PixelEmoji emoji={EMOJIS[cell.emojiId].icon} resolution={18} /></span><i />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingo && bingoAfterimages.has(index) ? <span className="bingo-afterimage"><PixelEmoji emoji={bingoAfterimages.get(index)!} resolution={18} /></span> : <span className="cell-plus">+</span>}
               </button>
             );
           })}
@@ -404,7 +405,7 @@ export function MultiplayerBattleScreen({
       <section className="draw-section" onClick={(event) => event.stopPropagation()}>
         <div className="draw-heading"><span>{myTurn ? "THIS TURN" : "WAITING"}</span><strong>DRAW EMOJI</strong></div>
         <div className="draw-row">
-          <button className="pool-button draw-pool-button" type="button" onClick={() => setPoolOpen(true)}><span>🎒</span><small>MY POOL</small></button>
+          <button className="pool-button draw-pool-button" type="button" onClick={() => setPoolOpen(true)}><span><PixelEmoji emoji="🎒" resolution={18} /></span><small>MY POOL</small></button>
           <div className="draw-cards">
             {myTurn ? match.privateState.draw.map((emojiId, drawIndex) => (
               <button
@@ -418,10 +419,10 @@ export function MultiplayerBattleScreen({
                   if (selectedCell === null) onInfo(emojiId);
                   else if (!interactionLocked && onPlace(drawIndex, selectedCell)) setSelectedCell(null);
                 }}
-              ><span>{EMOJIS[emojiId].icon}</span><strong>{EMOJIS[emojiId].name}</strong><small>{selectedCell === null ? "정보 보기" : "여기에 배치"}</small></button>
+              ><span><PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={18} /></span><strong>{EMOJIS[emojiId].name}</strong><small>{selectedCell === null ? "정보 보기" : "여기에 배치"}</small></button>
             )) : <div className="enemy-thinking-card">상대의 수…</div>}
           </div>
-          <div className="trash"><span>🗑️</span><small>DISCARD</small></div>
+          <div className="trash"><span><PixelEmoji emoji="🗑️" resolution={18} /></span><small>DISCARD</small></div>
         </div>
       </section>
 
@@ -435,7 +436,7 @@ export function MultiplayerBattleScreen({
           </div>
         </Modal>
       )}
-      {clientState.connection === "reconnecting" && <div className="reconnect-overlay" role="status"><span>🔄</span><strong>Server에 재접속 중…</strong><p>Board 입력을 잠시 멈췄습니다.</p></div>}
+      {clientState.connection === "reconnecting" && <div className="reconnect-overlay" role="status"><span><PixelEmoji emoji="🔄" resolution={18} /></span><strong>Server에 재접속 중…</strong><p>Board 입력을 잠시 멈췄습니다.</p></div>}
       {clientState.error && <div className="pvp-inline-error" role="alert">{clientState.error.message}</div>}
     </main>
   );

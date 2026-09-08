@@ -1,6 +1,7 @@
 import { EMOJIS } from "../content/emojis";
 import { STATUS_DEFINITIONS } from "../content/statuses";
 import type { BingoEffect, PlaceEffect, StatusId } from "../game/types";
+import { PixelEmoji } from "./PixelEmoji";
 
 function relatedStatuses(effects: Array<BingoEffect | PlaceEffect>): StatusId[] {
   const result = new Set<StatusId>();
@@ -43,7 +44,7 @@ export function EmojiDetailContent({ emojiId }: { emojiId: string }) {
 
   return (
     <div className="emoji-detail">
-      <span className="emoji-detail-icon">{emoji.icon}</span>
+      <PixelEmoji className="emoji-detail-icon" emoji={emoji.icon} resolution={24} label={emoji.name} />
       <div>
         <p className="eyebrow">{abilityLabel}</p>
         <h3>{emoji.name}</h3>
@@ -59,7 +60,7 @@ export function EmojiDetailContent({ emojiId }: { emojiId: string }) {
               const status = STATUS_DEFINITIONS[statusId];
               return (
                 <div key={statusId}>
-                  <span>{status.icon}</span>
+                  <PixelEmoji emoji={status.icon} resolution={14} />
                   <p><b>{status.name}</b><small>{status.description}</small></p>
                 </div>
               );

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { EmojiDetailContent } from "../components/EmojiDetailContent";
+import { PixelEmoji } from "../components/PixelEmoji";
 import { EMOJIS } from "../content/emojis";
 import type { Pool, Rarity } from "../game/types";
 import {
@@ -165,7 +166,7 @@ export function MultiplayerProfileScreen({
                       setNotice("");
                     }}
                   >
-                    <span>{emoji.icon}</span><strong>{emoji.name}</strong><small>{RARITY_LABEL[emoji.rarity]} · {count}/{maxCopies}</small>
+                    <PixelEmoji emoji={emoji.icon} resolution={18} /><strong>{emoji.name}</strong><small>{RARITY_LABEL[emoji.rarity]} · {count}/{maxCopies}</small>
                   </button>
                 );
               })}
@@ -213,7 +214,7 @@ export function MultiplayerProfileScreen({
                       onClick={() => setSelectedEmojiId(emojiId)}
                       aria-label={`${EMOJIS[emojiId].name} 정보 보기, Pool ${count}개`}
                     >
-                      <span>{EMOJIS[emojiId].icon}</span><strong>×{count}</strong><small>{EMOJIS[emojiId].name}</small>
+                      <PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={16} /><strong>×{count}</strong><small>{EMOJIS[emojiId].name}</small>
                     </button>
                   ))}
                 </div>
