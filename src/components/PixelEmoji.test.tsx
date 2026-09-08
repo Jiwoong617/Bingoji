@@ -3,8 +3,10 @@ import { PixelEmoji, PixelEmojiText } from "./PixelEmoji";
 
 describe("PixelEmoji", () => {
   it("keeps the Unicode Emoji fallback in non-canvas environments", () => {
-    render(<PixelEmoji emoji="⚔️" label="쌍검" />);
+    const { container } = render(<PixelEmoji emoji="⚔️" label="쌍검" />);
     expect(screen.getByRole("img", { name: "쌍검" })).toHaveTextContent("⚔️");
+    expect(container.querySelector(".pixel-emoji")).toHaveClass("fallback");
+    expect(container.querySelector(".pixel-emoji > span")).toBeNull();
   });
 
   it("separates Emoji sequences from ordinary text", () => {

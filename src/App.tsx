@@ -37,6 +37,7 @@ import { MultiplayerRoomScreen } from "./multiplayer/RoomScreen";
 import { MultiplayerBattleScreen } from "./multiplayer/BattleScreen";
 import { AudioSettingsButton } from "./audio/AudioSettingsButton";
 import { emitGameAudio } from "./audio/audioManager";
+import { PixelModeProvider, usePixelMode } from "./ui/PixelModeContext";
 import { DIFFICULTIES, DIFFICULTY_BY_ID } from "./game/difficulty";
 import {
   advanceEventTimers,
@@ -140,7 +141,7 @@ function PoolView({ player, onClose }: { player: RunPlayer; onClose: () => void 
       <div className="pool-grid pool-inventory" aria-label="보유 Emoji 목록">
         {entries.map(([id, count]) => (
           <button key={id} className={`pool-item ${selectedId === id ? "selected" : ""}`} type="button" aria-pressed={selectedId === id} onClick={() => setSelectedId(id)}>
-            <PixelEmoji emoji={EMOJIS[id].icon} /><strong>×{count}</strong><small>{EMOJIS[id].name}</small>
+            <span className="pool-item-summary"><PixelEmoji emoji={EMOJIS[id].icon} /><strong>×{count}</strong></span><small>{EMOJIS[id].name}</small>
           </button>
         ))}
       </div>
@@ -716,7 +717,7 @@ function BattleScreen({ run, combat, rng, onChange, onFinish, onInfo, onPool }: 
                   else if (!interactionLocked) onChange(selectCombatCell(combat, index));
                 }}
               >
-                {cell ? <><PixelEmoji emoji={EMOJIS[cell.emojiId].icon} resolution={20} /><i aria-hidden="true" />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingoIcon !== undefined ? <PixelEmoji className="bingo-afterimage" emoji={bingoIcon} resolution={20} /> : <span className="cell-plus">{enemyIntent?.cellIndex === index ? "◎" : "+"}</span>}
+                {cell ? <><PixelEmoji emoji={EMOJIS[cell.emojiId].icon} resolution={20} /><i className="cell-owner-dot" aria-hidden="true" />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingoIcon !== undefined ? <PixelEmoji className="bingo-afterimage" emoji={bingoIcon} resolution={20} /> : <span className="cell-plus">{enemyIntent?.cellIndex === index ? "◎" : "+"}</span>}
               </button>
             );
           })}
@@ -812,7 +813,7 @@ function RewardScreen({ run, options, onChoose, onInfo }: { run: RunProgress; op
           <div className="pool-grid large">
             {Object.entries(run.player.pool).map(([id, count]) => (
               <button key={id} className="pool-item" type="button" disabled={!canRemoveEmoji(run.player, id)} onClick={() => onChoose(removeEmoji(run.player, id))}>
-                <PixelEmoji emoji={EMOJIS[id].icon} /><strong>×{count}</strong><small>{EMOJIS[id].name}</small>
+                <span className="pool-item-summary"><PixelEmoji emoji={EMOJIS[id].icon} /><strong>×{count}</strong></span><small>{EMOJIS[id].name}</small>
               </button>
             ))}
           </div>
@@ -873,7 +874,7 @@ function EventScreen({ run, event, outcome, onChoose, onContinue, onInfo }: { ru
                 const selected = selectedIds.includes(id);
                 return (
                   <button key={id} className={`pool-item ${selected ? "selected" : ""}`} type="button" aria-pressed={selected} onClick={() => toggleEmoji(id)}>
-                    <PixelEmoji emoji={emoji.icon} /><strong>×{run.player.pool[id]}</strong><small>{emoji.name}</small>
+                    <span className="pool-item-summary"><PixelEmoji emoji={emoji.icon} /><strong>×{run.player.pool[id]}</strong></span><small>{emoji.name}</small>
                     <small>{emoji.rarity === "common" ? "일반" : emoji.rarity === "uncommon" ? "고급" : "희귀"} · {emoji.tags.slice(0, 2).join(", ") || "태그 없음"}</small>
                   </button>
                 );
@@ -953,7 +954,8 @@ function ResultScreen({ result, onRestart, onInfo }: { result: ResultState; onRe
   );
 }
 
-export default function App() {
+function AppContent() {
+  const { enabled: pixelMode } = usePixelMode();
   const rngRef = useRef(new SeededRandom(Date.now()));
   const rng = rngRef.current;
   const multiplayerClientRef = useRef<MultiplayerRoomClient | null>(null);
@@ -1173,7 +1175,7 @@ export default function App() {
 
   return (
     <div
-      className="app"
+      className={`app ${pixelMode ? "pixel-mode" : "base-mode"}`}
       onClickCapture={(event) => {
         if (!(event.target instanceof Element)) return;
         const interactive = event.target.closest("button, input[type='range'], [role='option']");
@@ -1202,5 +1204,13 @@ export default function App() {
       {infoEmoji && <EmojiInfo emojiId={infoEmoji} onClose={() => setInfoEmoji(null)} />}
       {helpOpen && <HowTo onClose={() => setHelpOpen(false)} />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <PixelModeProvider>
+      <AppContent />
+    </PixelModeProvider>
   );
 }

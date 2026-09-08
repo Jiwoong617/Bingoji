@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { PixelEmoji } from "../components/PixelEmoji";
+import { usePixelMode } from "../ui/PixelModeContext";
 import { gameAudio, type AudioSettings } from "./audioManager";
 
 function percent(value: number): number {
@@ -10,6 +11,7 @@ function percent(value: number): number {
 export function AudioSettingsButton() {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<AudioSettings>(() => gameAudio.getSettings());
+  const { enabled: pixelMode, setEnabled: setPixelMode } = usePixelMode();
 
   useEffect(() => gameAudio.subscribeSettings(setSettings), []);
 
@@ -41,6 +43,20 @@ export function AudioSettingsButton() {
               aria-label="효과음 볼륨"
               onChange={(event) => gameAudio.setSfxVolume(Number(event.target.value) / 100)}
             />
+          </div>
+          <div className="pixel-mode-control">
+            <label htmlFor="pixel-mode">
+              <span>
+                <strong>픽셀 모드</strong>
+                <small>픽셀 Emoji, 폰트와 CRT 화면 효과를 사용합니다.</small>
+              </span>
+              <input
+                id="pixel-mode"
+                type="checkbox"
+                checked={pixelMode}
+                onChange={(event) => setPixelMode(event.target.checked)}
+              />
+            </label>
           </div>
         </Modal>
       )}

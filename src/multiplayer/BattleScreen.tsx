@@ -110,7 +110,7 @@ function PvpPoolModal({ pool, onClose }: { pool: Pool; onClose: () => void }) {
         <div className="pool-grid pool-inventory">
           {Object.entries(pool).map(([emojiId, count]) => (
             <button key={emojiId} className={`pool-item ${selectedId === emojiId ? "selected" : ""}`} type="button" aria-pressed={selectedId === emojiId} onClick={() => setSelectedId(emojiId)}>
-              <span><PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={18} /></span><strong>×{count}</strong><small>{EMOJIS[emojiId].name}</small>
+              <span className="pool-item-summary"><PixelEmoji emoji={EMOJIS[emojiId].icon} resolution={18} /><strong>×{count}</strong></span><small>{EMOJIS[emojiId].name}</small>
             </button>
           ))}
         </div>
@@ -395,7 +395,7 @@ export function MultiplayerBattleScreen({
                   else if (!interactionLocked) setSelectedCell((current) => current === index ? null : index);
                 }}
               >
-                {cell ? <><span><PixelEmoji emoji={EMOJIS[cell.emojiId].icon} resolution={18} /></span><i />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingo && bingoAfterimages.has(index) ? <span className="bingo-afterimage"><PixelEmoji emoji={bingoAfterimages.get(index)!} resolution={18} /></span> : <span className="cell-plus">+</span>}
+                {cell ? <><span><PixelEmoji emoji={EMOJIS[cell.emojiId].icon} resolution={18} /></span><i className="cell-owner-dot" aria-hidden="true" />{cell.remainingTurns && <b className="retention-badge">{cell.remainingTurns}T</b>}</> : bingo && bingoAfterimages.has(index) ? <span className="bingo-afterimage"><PixelEmoji emoji={bingoAfterimages.get(index)!} resolution={18} /></span> : <span className="cell-plus">+</span>}
               </button>
             );
           })}

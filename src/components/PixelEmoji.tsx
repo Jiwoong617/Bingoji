@@ -1,4 +1,5 @@
 import { Fragment, type CSSProperties } from "react";
+import { usePixelMode } from "../ui/PixelModeContext";
 
 const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 const pixelEmojiCache = new Map<string, string>();
@@ -97,7 +98,8 @@ export function PixelEmoji({
   label?: string;
   style?: CSSProperties;
 }) {
-  const src = pixelEmojiDataUrl(emoji, resolution);
+  const { enabled } = usePixelMode();
+  const src = enabled ? pixelEmojiDataUrl(emoji, resolution) : null;
 
   return (
     <span
@@ -108,7 +110,7 @@ export function PixelEmoji({
       style={style}
     >
       {src && <img src={src} alt="" aria-hidden="true" draggable={false} />}
-      <span className={src ? "pixel-emoji-fallback visually-hidden" : "pixel-emoji-fallback"} aria-hidden={label ? "true" : undefined}>{emoji}</span>
+      <i className={src ? "pixel-emoji-fallback visually-hidden" : "pixel-emoji-fallback"} aria-hidden={label ? "true" : undefined}>{emoji}</i>
     </span>
   );
 }

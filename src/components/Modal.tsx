@@ -26,6 +26,11 @@ export function Modal({
 }) {
   const titleId = useId();
   const cardRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -36,7 +41,7 @@ export function Modal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !cardRef.current) return;
@@ -61,7 +66,7 @@ export function Modal({
       window.removeEventListener("keydown", handleKeyDown);
       previouslyFocused?.focus();
     };
-  }, [initialFocusRef, onClose]);
+  }, [initialFocusRef]);
 
   return (
     <div className={`modal-backdrop modal-${layout}`} role="presentation" onMouseDown={onClose}>

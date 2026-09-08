@@ -28,13 +28,25 @@ describe("Bingoji app flow", () => {
     const dialog = screen.getByRole("dialog", { name: "사운드 설정" });
     const bgm = within(dialog).getByRole("slider", { name: "배경음 볼륨" });
     const sfx = within(dialog).getByRole("slider", { name: "효과음 볼륨" });
+    const pixelMode = within(dialog).getByRole("checkbox", { name: /픽셀 모드/ });
+
+    expect(pixelMode).not.toBeChecked();
+    expect(document.querySelector(".app")).toHaveClass("base-mode");
+
     fireEvent.change(bgm, { target: { value: "25" } });
     fireEvent.change(sfx, { target: { value: "40" } });
+    pixelMode.focus();
+    fireEvent.click(pixelMode);
 
     expect(bgm).toHaveValue("25");
     expect(sfx).toHaveValue("40");
     expect(within(dialog).getByText("25%")).toBeInTheDocument();
     expect(within(dialog).getByText("40%")).toBeInTheDocument();
+    expect(pixelMode).toBeChecked();
+    expect(pixelMode).toHaveFocus();
+    expect(document.querySelector(".app")).toHaveClass("pixel-mode");
+
+    fireEvent.click(pixelMode);
   });
 
   it("builds a valid multiplayer profile from every eligible registry Emoji and keeps the draft in app memory", async () => {
